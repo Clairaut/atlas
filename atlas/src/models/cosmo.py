@@ -58,7 +58,7 @@ class CelestialState:
 
 	@property
 	def retrograde(self) -> bool:
-		if lon_speed < 0:
+		if self.dlon < 0:
 			return True
 
 	@property
