@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timedelta, timezone
 
 # Internal libraries
-from atlas.src.utils.logger import handle_log
+from src.utils.logger import handle_log
 
 if TYPE_CHECKING:
-	from atlas.src.clients.ephe_client import EphemerisClient
-	from atlas.src.models.topo import Location
+	from src.clients.ephe_client import EphemerisClient
+	from src.models.topo import Location
 
 
 class Observatory:
@@ -30,24 +30,29 @@ class Observatory:
 	def __init__(
 		self, 
 		ephe_client: "EphemerisClient",
-		dt: datetime | None = None,
-		location: Optional["Location"] = None,
+		dt: datetime,
+		location: "Location",
 		hsys: str = "P",
 		verbose: bool = False
 	):
 		self._ephe_client = ephe_client
 		self._dt = dt
-		self._location = location
 		self._hsys = "P"
 		self._zodiac = "tropical"
 		self._verbose = verbose
+		self._location = location
 
 		# Cache
 		self._jd_cache: float | None = None
 		self._jd_dt: datetime | None = None
 
 		if verbose:
-			handle_log("info", "ok observatory initiation (dt=%s, location:%s)", dt, location)
+			handle_log(
+				"info", 
+				"ok observatory initiation (dt=%s, location:%s)", 
+				dt, location,
+				source="observatory"
+			)
 
 	@property
 	def _dt(self) -> datetime:
@@ -74,7 +79,8 @@ class Observatory:
 				handle_log(
 					"info", 
 					"ok topo set (lat=%.6f, lon=%.6f, alt=%.1f)", 
-					location.lat, location.lon, location.alt
+					location.lat, location.lon, location.alt,
+					source="observatory"
 				)
 
 	@property
@@ -82,7 +88,12 @@ class Observatory:
 		# Initialize datetime; set to utc now if empty
 		dt = self._dt or datetime.now(timezone.utc)
 		if self._verbose and self._dt is None:
-			handle_log("warning", "warning _jd: observatory time null; defaulting to present UTC: %s", dt)
+			handle_log(
+				"warning", 
+				"warning _jd: observatory time null; defaulting to present UTC: %s", 
+				dt,
+				source="observatory"
+			)
 		
 		# Check if cache is valid
 		if (self._jd_dt == dt) and (self._jd_cache is not None):
@@ -114,8 +125,11 @@ class Observatory:
 			self._location = location
 		
 		if self._verbose:
-			handle_log("info", "ok observatory setting (dt=%s, location:%s)",
-				self._dt, self._location
+			handle_log(
+				"info", 
+				"ok observatory setting (dt=%s, location:%s)",
+				self._dt, self._location,
+				source="observatory"
 			)
 
 	# Shift observatory datetime/location
@@ -126,7 +140,12 @@ class Observatory:
 				dt_temp = self._dt
 				self._dt += t_delta
 				if self._verbose: 
-					handle_log("info", "ok observatory time shift (%s to %s)", dt_temp, self._dt)
+					handle_log(
+						"info", 
+						"ok observatory time shift (%s to %s)", 
+						dt_temp, self._dt,
+						source="observatory"
+					)
 			else:
 				handle_log("error", "bad observatory time shift: dt not set")
 				raise ValueError("Failed to shift observatory time: dt is not yet set")
@@ -135,15 +154,16 @@ class Observatory:
 		if l_delta:
 			if self._location:
 				dlat, dlon, dalt = l_delta
-				old = self._location
-				new_loc = type(old)(lat=old.lat + dlat, lon=old.lon + dlon, alt=old.alt + dalt)
+				old_loc = self._location
+				new_loc = type(old_loc)(lat=old_loc.lat + dlat, lon=old_loc.lon + dlon, alt=old_loc.alt + dalt)
 				self._location = new_loc
 				if self._verbose: 
 					handle_log(
 						"info", 
 						"ok observatory location shift ((%f, %f, %f) to (%f, %f, %f))",
-						lon_temp, lat_temp, alt_temp,
-						self._location.lon, self._location.lat, self._location.alt
+						old_loc.lat, old_loc.lon, old_loc.alt,
+						self._location.lon, self._location.lat, self._location.alt,
+						source="observatory"
 					)
 			else:
 				handle_log("error", "bad observatory location shift: location not set")
@@ -158,9 +178,21 @@ class Observatory:
 				if aya:
 					aya_code = self._AYA_ALIASES.get(aya)
 					if not aya_code:
-						handle_logs("error", "bad observatory alignment: ayanamsa alias not found")
+						handle_log(
+							"error", 
+							"bad observatory alignment: ayanamsa alias not found"
+							" (ayanamsa=%s)", aya,
+							source="observatory"	
+						)
 						raise ValueError(f"Failed to align observatory zodiac system: ayanamsa alias not found: {aya}")
-				self._ephe_client.use_sidereal(aya_code)
+					self._ephe_client.use_sidereal(aya_code)
+				else:
+					handle_log(
+						"error", 
+						"bad observatory alignment: ayanamsa not provided for sidereal zodiac"
+						source="observatory"
+					)
+					raise ValueError("Failed to align observatory zodiac system: ayanamsa must be provided for sidereal zodiac")
 		return self
 
 	# Orient the observatory frame
@@ -194,14 +226,16 @@ class Observatory:
      #======#
 
 	# Cast house cusps
-	def cast(self) -> tuple[tuple]:
-	    if not self._location:
-	        handle_log("error", "bad observatory cast: location is not yet set")
-	        raise ValueError("Failed to cast observatory cusps/ascmc: location is not yet set")
-	    cusps, ascmc = self._ephe_client.query_houses(self._jd, self._location.lat, self._location.lon, self._hsys)
-	    if self._verbose:
-	        handle_log("info", "ok observatory cast (dt=%s, location=%s)", self._dt, self._location)
-	    return cusps, ascmc
+	def cast(self) -> tuple[tuple, tuple]:
+		if not self._location:
+			handle_log("error", "bad observatory cast: location is not yet set")
+			raise ValueError("Failed to cast observatory cusps/ascmc: location is not yet set")
+		cusps, ascmc = self._ephe_client.query_houses(self._jd, self._location.lat, self._location.lon, self._hsys)
+		
+		if self._verbose:
+			handle_log("info", "ok observatory cast (dt=%s, location=%s)", self._dt, self._location)
+		
+		return cusps, ascmc
 
 	# Observe a target
 	def observe(self, target_id: int) -> tuple:

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 # Internal libraries
-from atlas.src.utils.logger import handle_log
+from src.utils.logger import handle_log
 
 # External libraries
 import tomllib

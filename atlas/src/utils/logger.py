@@ -3,43 +3,40 @@
 
 # Standard libraries
 import logging
-import traceback
+from pathlib import Path
 
+
+LOG_DIR = Path.cwd() / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "atlas.log"
+
+_LEVELS = {
+	"debug": logging.DEBUG,
+	"info": logging.INFO,
+	"warning": logging.WARNING,
+	"error": logging.ERROR,
+	"critical": logging.CRITICAL,
+}
 
 _logger = logging.getLogger("atlas")
 if not _logger.handlers:
-	# Initialize handler
-	handler = logging.StreamHandler()
+	_logger.setLevel(logging.DEBUG)
+	_logger.propagate = False
 
-	# Initialize formatter
 	formatter = logging.Formatter(
-		"%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+		"%(asctime)s [%(levelname)s] %(source)s: %(message)s"
 	)
 
-	# Set the formatter to the handler
-	handler.setFormatter(formatter)
+	file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+	file_handler.setFormatter(formatter)
 
-	# Add handler to the logger
-	_logger.addHandler(handler)
+	stream_handler = logging.StreamHandler()
+	stream_handler.setFormatter(formatter)
+
+	_logger.addHandler(file_handler)
+	_logger.addHandler(stream_handler)
 
 
-def handle_log(level: str, message: str, *args, **kwargs):
-	# Handle log by level
-	match level:
-		case "debug":
-			_logger.log(logging.DEBUG, message, *args, **kwargs)
-
-		case "info":
-			_logger.log(logging.INFO, message, *args, **kwargs)
-
-		case "warning":
-			_logger.log(logging.WARNING, message, *args, **kwargs)
-
-		case "error":
-			_logger.log(logging.ERROR, message, *args, **kwargs)
-
-		case "critical":
-			_logger.log(logging.CRITICAL, message, *args, **kwargs)
-
-		case _:
-			_logger.log(logging.INFO, message, *args, **kwargs)
+def handle_log(level: str, message: str, *args, source: str = "atlas", **kwargs):
+	log_level = _LEVELS.get(level.lower(), logging.INFO)
+	_logger.log(log_level, message, *args, extra={"source": source}, **kwargs)

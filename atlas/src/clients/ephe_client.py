@@ -4,7 +4,7 @@
 from time import perf_counter_ns
 
 # Internal libraries
-from atlas.src.utils.logger import handle_log
+from src.utils.logger import handle_log
 
 # External libraries
 import swisseph as swe
@@ -52,8 +52,8 @@ class EphemerisClient:
 
 	# Set zodiac type
 	def use_tropical(self):
-	    self._flags &= ~self._ZODIAC_MASK
-	    return self
+		self._flags &= ~self._ZODIAC_MASK
+		return self
 
 	def use_sidereal(self, aya_code: str | None):
 		match (aya_code or "").upper():
@@ -70,28 +70,28 @@ class EphemerisClient:
 		return self
 
 	def use_geocentric(self):
-	    self._flags &= ~self._FRAME_MASK               # clear TOPO, HEL, BARY
-	    return self
+		self._flags &= ~self._FRAME_MASK               # clear TOPO, HEL, BARY
+		return self
 
 	def use_topocentric(self):
-	    self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_TOPOCTR
-	    return self
+		self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_TOPOCTR
+		return self
 
 	def use_heliocentric(self):
-	    self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_HELCTR
-	    return self
+		self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_HELCTR
+		return self
 
 	def use_barycentric(self):
-	    self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_BARYCTR
-	    return self
+		self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_BARYCTR
+		return self
 
 	def use_ecliptic(self):
-	    self._flags &= ~self._AXIS_MASK
-	    return self
+		self._flags &= ~self._AXIS_MASK
+		return self
 
 	def use_equatorial(self):
-	    self._flags |= swe.FLG_EQUATORIAL
-	    return self
+		self._flags |= swe.FLG_EQUATORIAL
+		return self
 
 
 	 #==========#
@@ -114,7 +114,7 @@ class EphemerisClient:
 		return swe.get_ayanamsa_ut(jd)
 
 	# Query ecliptic alignment of the houses
-	def query_houses(self, jd: float, lat: float, lon: float, hsys: str = "P") -> tuple[float]:
+	def query_houses(self, jd: float, lat: float, lon: float, hsys: str = "P") -> tuple:
 		t0 = perf_counter_ns()
 		cusps, ascmc = swe.houses(jd, lat, lon, hsys)
 		if self._verbose:
@@ -145,5 +145,5 @@ class EphemerisClient:
 		phen = swe.pheno_ut(jd, target_id, self._flags)[:5]
 		if self._verbose:
 			te = (perf_counter_ns() - t0) / 1_000_000
-			handle_log("info", "pheno_ut(target=%i, jd=%.6f) -> ret=%i; took %.2f ms", target_id, jd, ret, te)
+			handle_log("info", "pheno_ut(target=%i, jd=%.6f); took %.2f ms", target_id, jd, te)
 		return phen
