@@ -189,7 +189,7 @@ class Observatory:
 				else:
 					handle_log(
 						"error", 
-						"bad observatory alignment: ayanamsa not provided for sidereal zodiac"
+						"bad observatory alignment: ayanamsa not provided for sidereal zodiac",
 						source="observatory"
 					)
 					raise ValueError("Failed to align observatory zodiac system: ayanamsa must be provided for sidereal zodiac")
@@ -257,11 +257,20 @@ class Observatory:
 
 	# Profile a target
 	def profile(self, target_id: int) -> tuple:
-		pheno = self._ephe_client.query_pheno(target_id, self._jd)
+		pheno_now = self._ephe_client.query_pheno(target_id, self._jd)
+		pheno_prev = self._ephe_client.query_pheno(target_id, self._jd - 1e-5)
+
+		# Determine waxing/waning
+		waxing = pheno_now[1] >= pheno_prev[1]
+
+		# Stitch result
+		result = (*pheno_now, waxing)
+
 		if self._verbose:
 			handle_log(
-				"info", 
+				"info",
 				"ok observatory profile; (target ID=%i, dt=%s, location=%s)",
 				target_id, self._dt, self._location
 			)
-		return pheno
+
+		return result

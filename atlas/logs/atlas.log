@@ -1,0 +1,39 @@
+2025-11-28 13:29:15,884 [INFO] observatory: ok topo set (lat=0.000000, lon=0.000000, alt=0.0)
+2025-11-28 13:29:15,884 [INFO] observatory: ok observatory initiation (dt=2025-11-28 13:29:15.884061, location:Location(lat=0, lon=0, alt=0))
+2025-11-28 13:29:15,884 [WARNING] atlas: config missing - created default at /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:29:15,884 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:29:15,884 [INFO] observatory: ok topo set (lat=0.000000, lon=0.000000, alt=0.0)
+2025-11-28 13:29:15,885 [INFO] observatory: ok observatory setting (dt=2025-11-28 13:29:15.884967, location:Location(lat=0, lon=0, alt=0))
+2025-11-28 13:29:15,885 [INFO] atlas: ok observatory frame orientation (frame=ecliptic, flags=258)
+2025-11-28 13:29:15,885 [INFO] atlas: ok observatory observation; (target ID=0, dt=2025-11-28 13:29:15.884967, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:29:15,885 [INFO] wizard: Celestial position: frame=ecliptic, pos=(246.5705311922186, 2.8091683602607293e-05, 0.9865587064848945, 1.0124735324013858, 3.373831072154728e-05, -0.00017854775360724316)
+2025-11-28 13:29:15,885 [INFO] atlas: ok observatory frame orientation (frame=equatorial, flags=2306)
+2025-11-28 13:29:15,885 [INFO] atlas: ok observatory observation; (target ID=0, dt=2025-11-28 13:29:15.884967, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:29:15,885 [INFO] wizard: Celestial position: frame=equatorial, pos=(244.71765492555014, -21.405428544166142, 0.9865587064848944, 1.0716871759248239, -0.17196105365181275, -0.00017854775360724262)
+2025-11-28 13:29:15,885 [INFO] atlas: ok observatory profile; (target ID=0, dt=2025-11-28 13:29:15.884967, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:29:15,885 [INFO] wizard: Celestial phenomenon: pheno=(0.0, 0.0, 0.0, 0.5403997404496148, -26.8893855467859)
+2025-11-28 13:31:09,212 [INFO] observatory: ok topo set (lat=0.000000, lon=0.000000, alt=0.0)
+2025-11-28 13:31:09,212 [INFO] observatory: ok observatory initiation (dt=2025-11-28 13:31:09.212346, location:Location(lat=0, lon=0, alt=0))
+2025-11-28 13:31:09,213 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:31:09,213 [INFO] observatory: ok topo set (lat=0.000000, lon=0.000000, alt=0.0)
+2025-11-28 13:31:09,213 [INFO] observatory: ok observatory setting (dt=2025-11-28 13:31:09.213090, location:Location(lat=0, lon=0, alt=0))
+2025-11-28 13:31:09,213 [INFO] atlas: ok observatory frame orientation (frame=ecliptic, flags=258)
+2025-11-28 13:31:09,213 [INFO] atlas: ok observatory observation; (target ID=0, dt=2025-11-28 13:31:09.213090, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:31:09,213 [INFO] wizard: Celestial position: frame=ecliptic, pos=(246.57185922474474, 2.8141194864848904e-05, 0.9865584722726893, 1.0124738740596382, 3.3744460036385045e-05, -0.0001785423589427827)
+2025-11-28 13:31:09,213 [INFO] atlas: ok observatory frame orientation (frame=equatorial, flags=2306)
+2025-11-28 13:31:09,213 [INFO] atlas: ok observatory observation; (target ID=0, dt=2025-11-28 13:31:09.213090, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:31:09,213 [INFO] wizard: Celestial position: frame=equatorial, pos=(244.71906062908317, -21.405654094705923, 0.9865584722726892, 1.0716908462886492, -0.1719521715226936, -0.00017854235894278398)
+2025-11-28 13:31:09,213 [INFO] atlas: ok observatory profile; (target ID=0, dt=2025-11-28 13:31:09.213090, location=Location(lat=0, lon=0, alt=0))
+2025-11-28 13:31:09,213 [INFO] wizard: Celestial phenomenon: pheno=(0.0, 0.0, 0.0, 0.5403998687432304, -26.889386062304304)
+2025-11-28 13:31:24,569 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:31:42,028 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:35:46,912 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:38:19,946 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:38:33,717 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 13:39:30,770 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:09:40,945 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:10:19,893 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:12:35,485 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:13:36,309 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:32:44,001 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
+2025-11-28 14:39:19,823 [INFO] atlas: config loaded from /home/clairaut/.config/atlas/atlas.toml
