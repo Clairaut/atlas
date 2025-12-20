@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: atlas-dev
+Version: 0.1.0
+Summary: A SwissEph interface for visualizing astrological/astronomical data.
+Author: clairaut
+Requires-Python: >=3.9
+Requires-Dist: pyswisseph
+Requires-Dist: rich
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

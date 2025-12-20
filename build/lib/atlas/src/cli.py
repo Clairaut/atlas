@@ -214,10 +214,9 @@ def _handle_observe(args):
                 location=args.location,
                 target=target,
                 zodiac=args.zodiac,
-                properties=properties,
                 frames=args.frames
             )
-            
+
             celestial_states.append(celestial_state)
 
         # Make a table which overviews the data

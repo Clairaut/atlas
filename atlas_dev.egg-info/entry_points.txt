@@ -1,0 +1,2 @@
+[console_scripts]
+atlas-dev = atlas.src.cli:main
