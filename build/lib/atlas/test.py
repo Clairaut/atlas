@@ -6,7 +6,7 @@ import os
 from src.core.wizard import Wizard
 from src.core.observatory import Observatory
 from src.clients.ephe_client import EphemerisClient
-from src.models.topo import Location
+from src.models.location import Location
 
 # External libraries
 from pathlib import Path

@@ -6,14 +6,21 @@ setup(
     description="A SwissEph interface for visualizing astrological/astronomical data.",
     author="clairaut",
     packages=find_packages(),
+    package_data={"atlas_dev": ["src/view/shaders/*.vert", "src/view/shaders/*.frag"]},
     install_requires=[
         "pyswisseph",
         "rich",
-        # Add other dependencies here
+        "timezonefinder",
+        "pytz",
+        "moderngl",
+        "moderngl-window",
+        "Pillow",
+        "numpy",
+        "glfw",
     ],
     entry_points={
         "console_scripts": [
-            "atlas-dev=atlas.src.cli:main"
+            "atlas=atlas_dev.src.cli:main"
         ]
     },
     python_requires=">=3.9",

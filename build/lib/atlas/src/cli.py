@@ -4,7 +4,6 @@ from datetime import datetime
 import argparse
 import traceback
 
-
 # Internal libraries
 from atlas.src.core.wizard import Wizard
 from atlas.src.core.observatory import Observatory
@@ -78,7 +77,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # Add basic arguments to the observe parser
     observe_parser.add_argument("targets", help = "celestial bodies to be observed", nargs = "+")
     observe_parser.add_argument("-d", "--date", help = "date of observation '(%Y-%m-%d)'", nargs = "?", default = datetime.now().date().strftime("%Y-%m-%d"))
-    observe_parser.add_argument("-t", "--time", help = "time of observation '(%H-%M-%s)'", nargs = "?", default = datetime.now().time().strftime("%H:%M:%s"))
+    observe_parser.add_argument("-t", "--time", help = "time of observation '(%H-%M-%s)'", nargs = "?", default = datetime.now().time().strftime("%H:%M:%S"))
     observe_parser.add_argument("-l", "--location", help = "location of observation", nargs = "?", default = default_location_str)
     observe_parser.add_argument("-z", "--zodiac", help = "zodiac type of observation", choices = ["tropical", "sidereal"], default = "tropical")
     observe_parser.add_argument("-a", "--attributes", help="additional attributes to be displayed within observation", choices=["phase", "distance"], nargs="*", default=None)
@@ -214,9 +213,10 @@ def _handle_observe(args):
                 location=args.location,
                 target=target,
                 zodiac=args.zodiac,
+                properties=properties,
                 frames=args.frames
             )
-
+            
             celestial_states.append(celestial_state)
 
         # Make a table which overviews the data
@@ -228,10 +228,8 @@ def _handle_observe(args):
 
 
 
-
-
 def main():
-    """Entry point for the atlas-dev CLI."""
+    # Entry point for the CLI
     global cli_wizard
     cli_wizard = _initialize_cli(verbose=False)
     parser = _build_parser()

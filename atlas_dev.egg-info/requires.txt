@@ -1,2 +1,9 @@
 pyswisseph
 rich
+timezonefinder
+pytz
+moderngl
+moderngl-window
+Pillow
+numpy
+glfw

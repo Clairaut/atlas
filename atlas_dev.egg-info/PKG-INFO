@@ -6,6 +6,13 @@ Author: clairaut
 Requires-Python: >=3.9
 Requires-Dist: pyswisseph
 Requires-Dist: rich
+Requires-Dist: timezonefinder
+Requires-Dist: pytz
+Requires-Dist: moderngl
+Requires-Dist: moderngl-window
+Requires-Dist: Pillow
+Requires-Dist: numpy
+Requires-Dist: glfw
 Dynamic: author
 Dynamic: requires-dist
 Dynamic: requires-python
