@@ -2,5 +2,5 @@
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.pythonProjects": [],
     "python.defaultInterpreterPath": "/home/clairaut/.pyenv/versions/3.12.4/bin/python",
-    "python.analysis.extraPaths": ["/home/clairaut/code/atlas-lib/atlas-dev-repo"]
+    "python.analysis.extraPaths": ["/home/clairaut/code/atlas-lib/atlas-repo"]
 }

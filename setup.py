@@ -1,12 +1,13 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="atlas-dev",
+    name="atlas",
     version="0.1.0",
     description="A SwissEph interface for visualizing astrological/astronomical data.",
     author="clairaut",
-    packages=find_packages(),
-    package_data={"atlas_dev": ["src/view/shaders/*.vert", "src/view/shaders/*.frag"]},
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
+    package_data={"atlas": ["view/shaders/*.vert", "view/shaders/*.frag"]},
     install_requires=[
         "pyswisseph",
         "rich",
@@ -20,7 +21,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "atlas=atlas_dev.src.cli:main"
+            "atlas=atlas.cli:main"
         ]
     },
     python_requires=">=3.9",

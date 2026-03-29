@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 # Internal libraries
 from atlas.utils.logger import handle_log
+from atlas.models.aspect import Aspect, ASPECT_DEFS, ASPECT_GLYPHS
 
 # External libraries
 import moderngl
@@ -247,7 +248,7 @@ def _resolve_collisions(nodes: list[_LabelNode], tolerance: float = 5.0, max_ite
 # BASE CHART #
 #------------#
 
-class Chart(moderngl_window.WindowConfig): # type: ignore
+class Chart(moderngl_window.WindowConfig):
     gl_version   = (3, 3)
     window_size  = (900, 900)
     aspect_ratio = 1.0
@@ -273,8 +274,8 @@ class Chart(moderngl_window.WindowConfig): # type: ignore
         # Orthographic projection
         v    = self.VIEWPORT
         proj = _ortho(-v, v, -v, v)
-        self._line_prog['proj'].write(proj.tobytes()) # type: ignore
-        self._glyph_prog['proj'].write(proj.tobytes()) # type: ignore
+        self._line_prog['proj'].write(proj.tobytes())
+        self._glyph_prog['proj'].write(proj.tobytes())
 
         # Glyph atlases
         self._sym_atlas = GlyphAtlas(self.ctx, _SYMBOL_FONT, SYMBOL_CHARS)
@@ -363,6 +364,22 @@ class Chart(moderngl_window.WindowConfig): # type: ignore
             self._add_glyph(ch, start_x + i * spacing, y, size, color)
 
     # Compute all aspects between a list of celestial states using the shared model
+    def _compute_aspects(self, celestials: list) -> list[Aspect]:
+        aspects: list[Aspect] = []
+        for i in range(len(celestials)):
+            for j in range(i + 1, len(celestials)):
+                a, b = celestials[i], celestials[j]
+                if a.lon is None or b.lon is None:
+                    continue
+                diff = abs(a.lon - b.lon) % 360
+                if diff > 180:
+                    diff = 360 - diff
+                for angle, name, orb_limit in ASPECT_DEFS:
+                    if abs(diff - angle) <= orb_limit:
+                        aspects.append(Aspect(name=name, body_one=a, body_two=b, orb=abs(diff - angle)))
+                        break
+        return aspects
+
     # Release all VAOs and reset geometry accumulators for a fresh rebuild
     def _reset_geometry(self):
         for vao in [self._line_vao, self._asp_hard_vao, self._asp_med_vao,
@@ -455,7 +472,6 @@ class RadixChart(Chart):
     # Class-level data (set via configure() before run_window_config())
     _cusps:      list[float] = []
     _celestials: list        = []
-    _aspects:    list        = []
 
     # Ring radii in chart-space units
     R_INNER      = 0.30   # inner boundary (aspect web)
@@ -474,11 +490,10 @@ class RadixChart(Chart):
     TEXT_SIZE  = 0.062
 
     @classmethod
-    def configure(cls, cusps: list[float], celestials: list, aspects: list = [],
-                  title: str = "Radix Chart", save_path: Optional[str] = None):
+    def configure(cls, cusps: list[float], celestials: list, title: str = "Radix Chart",
+                  save_path: Optional[str] = None):
         cls._cusps      = cusps
         cls._celestials = celestials
-        cls._aspects    = aspects
         cls.title       = title
         cls._save_path  = save_path
         cls._save_done  = False
@@ -560,10 +575,11 @@ class RadixChart(Chart):
             self._add_text(label, r_lbl * math.cos(angle), r_lbl * math.sin(angle), self.TEXT_SIZE * 0.70, WHITE)
 
     def _build_aspects(self):
-        # Draw pre-computed aspect lines between celestial bodies inside R_INNER
-        for aspect in self._aspects:
+        # Draw aspect lines between celestial bodies inside R_INNER
+        for aspect in self._compute_aspects(self._celestials):
             color  = ASPECT_COLORS.get(aspect.name, DIM_WHITE)
             weight = ASPECT_WEIGHTS.get(aspect.name, 'soft')
+            
             if aspect.body_one.lon and aspect.body_two.lon:
                 ang1 = math.radians(aspect.body_one.lon) - self._base_rad
                 ang2 = math.radians(aspect.body_two.lon) - self._base_rad
@@ -937,33 +953,27 @@ class PlaybackChart(LiveRadixChart):
 class TransitChart(RadixChart):
     title = "Transit Chart"
 
-    VIEWPORT = 1.4
+    VIEWPORT = 1.60
 
     # Class-level transit data (set via configure_transit before run_window_config)
     _transit_cusps:      list[float] = []
     _transit_celestials: list        = []
-    _transit_aspects:    list        = []
 
     # Outer ring radii
-    R_TRANSIT_RIM = 1.25
+    R_TRANSIT     = 1.25
+    R_TRANSIT_RIM = 1.35
 
     TRANSIT_GLYPH_OFF = 0.08
     TRANSIT_SIGN_OFF  = 0.14
     TRANSIT_ORB_OFF   = 0.20
 
-    # Suppress natal-only aspects
-    def _build_aspects(self):
-        pass
-
     @classmethod
     def configure_transit(cls, cusps: list[float], celestials: list,
                           transit_cusps: list[float], transit_celestials: list,
-                          transit_aspects: list = [],
                           title: str = "Transit Chart", save_path: Optional[str] = None):
         cls.configure(cusps=cusps, celestials=celestials, title=title, save_path=save_path)
         cls._transit_cusps      = transit_cusps
         cls._transit_celestials = transit_celestials
-        cls._transit_aspects    = transit_aspects
 
     @classmethod
     def show(cls):
@@ -976,7 +986,6 @@ class TransitChart(RadixChart):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
 
     def _build(self):
         super()._build()
@@ -1046,15 +1055,29 @@ class TransitChart(RadixChart):
                 pass
 
     def _build_transit_aspects(self):
-        # Draw pre-computed cross-chart aspect lines
-        for aspect in self._transit_aspects:
-            color  = ASPECT_COLORS.get(aspect.name, DIM_WHITE)
-            weight = ASPECT_WEIGHTS.get(aspect.name, 'soft')
-            if aspect.body_one.lon and aspect.body_two.lon:
-                ang1 = math.radians(aspect.body_one.lon) - self._base_rad
-                ang2 = math.radians(aspect.body_two.lon) - self._base_rad
-                x1 = self.R_INNER * math.cos(ang1)
-                y1 = self.R_INNER * math.sin(ang1)
-                x2 = self.R_INNER * math.cos(ang2)
-                y2 = self.R_INNER * math.sin(ang2)
-                self._add_segment(x1, y1, x2, y2, color, weight)
+        # Cross-chart aspects: natal body (inner) to transit body (outer)
+        combined  = [(cel, 'natal')   for cel in self._celestials]
+        combined += [(cel, 'transit') for cel in self._transit_celestials]
+
+        for i, (a, a_type) in enumerate(combined):
+            for j, (b, b_type) in enumerate(combined):
+                if j <= i or a_type == b_type:
+                    continue  # only cross-chart pairs
+                a_lon, b_lon = a.lon, b.lon
+                if a_lon is None or b_lon is None:
+                    continue
+                diff = abs(a_lon - b_lon) % 360
+                if diff > 180:
+                    diff = 360 - diff
+                for angle, name, orb_limit in ASPECT_DEFS:
+                    if abs(diff - angle) <= orb_limit:
+                        color  = ASPECT_COLORS.get(name, DIM_WHITE)
+                        weight = ASPECT_WEIGHTS.get(name, 'soft')
+                        ang1 = math.radians(a_lon) - self._base_rad
+                        ang2 = math.radians(b_lon) - self._base_rad
+                        x1 = self.R_INNER * math.cos(ang1)
+                        y1 = self.R_INNER * math.sin(ang1)
+                        x2 = self.R_INNER * math.cos(ang2)
+                        y2 = self.R_INNER * math.sin(ang2)
+                        self._add_segment(x1, y1, x2, y2, color, weight)
+                        break
