@@ -22,7 +22,7 @@
 
 Atlas is a celestial navigation interface for Swiss Ephemeris. It computes planetary positions, tracks phases and synodic cycles, detects celestial events, and renders astrological charts using a modern OpenGL pipeline.
 
-The CLI supports single-moment observation, time-series traces, event detection across configurable date ranges, and real-time chart playback — in both tropical and sidereal zodiac systems.
+The CLI supports single-moment observation, time-series traces, event detection across configurable date ranges, real-time chart playback, and a REST API server — in both tropical and sidereal zodiac systems.
 
 ---
 
@@ -40,8 +40,8 @@ The CLI supports single-moment observation, time-series traces, event detection 
 ## Installation
 
 ```bash
-git clone https://github.com/Clairaut/Atlas.git
-cd Atlas
+git clone https://github.com/Clairaut/atlas.git
+cd atlas
 pip install .
 ```
 
@@ -49,7 +49,7 @@ pip install .
 
 ## CLI Reference
 
-The top-level command is `atlas`. Three subcommands are available: `observe`, `seek`, and `chart`.
+The top-level command is `atlas`. Four subcommands are available: `observe`, `seek`, `chart`, and `serve`.
 
 ---
 
@@ -188,6 +188,39 @@ atlas chart --save playback.mp4                    # save playback video
 
 ---
 
+### `serve`
+
+Start the Atlas REST API server. Exposes celestial observation data over HTTP.
+
+```
+atlas serve [options]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--host` | Bind host (default `127.0.0.1`) |
+| `--port` | Bind port (default `5001`) |
+
+**Endpoint:** `GET /observe`
+
+| Param | Description |
+|-------|-------------|
+| `at` | Datetime `YYYY-MM-DD[THH:MM:SS]` (default: now) |
+| `targets` | Comma-separated body names (default: all configured) |
+| `zodiac` | `tropical` (default) or `sidereal` |
+| `lat` / `lon` / `alt` | Observer location (default: config values) |
+
+```bash
+atlas serve                          # start on 127.0.0.1:5001
+atlas serve --port 8080              # custom port
+
+curl "http://127.0.0.1:5001/observe"
+curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T12:00:00"
+curl "http://127.0.0.1:5001/observe?zodiac=sidereal&lat=48.85&lon=2.35"
+```
+
+---
+
 ## Configuration
 
 Atlas reads from a config file (typically `~/.atlas/config.yaml` or project-local). Key sections:
@@ -203,6 +236,7 @@ Atlas reads from a config file (typically `~/.atlas/config.yaml` or project-loca
 ```
 src/atlas/
 ├── cli.py                  # argument parsing and display
+├── serve.py                # Flask REST API server
 ├── clients/
 │   └── ephe_client.py      # SwissEph wrapper (positions, phenomena, houses, horizontal conversion)
 ├── core/

@@ -44,7 +44,6 @@ def _serialize(state: CelestialState) -> dict:
 # Build and return a configured Flask app
 def create_app() -> "Flask":
     from flask import Flask, jsonify, request
-    import swisseph as swe
 
     cfg       = load_config()
     ephe_path = cfg.get("ephemeris", {}).get("path") or os.fspath(Path.home() / ".ephe")
@@ -59,26 +58,45 @@ def create_app() -> "Flask":
 
     app = Flask(__name__)
 
-    # Return current positions for all configured celestial bodies
+    _available_celestials = list(cfg.get("celestials", {}).keys())
+
+    # Parse a datetime string — ISO format with optional time component
+    def _parse_dt(s: str) -> datetime:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        raise ValueError(f"unrecognized datetime format: '{s}'")
+
+    # Return current positions for requested celestial bodies
     @app.get("/observe")
     def observe():
-        lat: float = request.args.get("lat", default=_lat, type=float)  # type: ignore
-        lon: float = request.args.get("lon", default=_lon, type=float)  # type: ignore
-        alt: float = request.args.get("alt", default=_alt, type=float)  # type: ignore
+        raw_targets: str = request.args.get("targets", default="", type=str)  # type: ignore
+        targets: list[str] = [t.strip() for t in raw_targets.split(",") if t.strip()] or _available_celestials
+        at: str            = request.args.get("at",     default="",          type=str)   # type: ignore
+        zodiac: str        = request.args.get("zodiac", default="tropical",  type=str)   # type: ignore
+        lat: float         = request.args.get("lat",    default=_lat,        type=float) # type: ignore
+        lon: float         = request.args.get("lon",    default=_lon,        type=float) # type: ignore
+        alt: float         = request.args.get("alt",    default=_alt,        type=float) # type: ignore
 
-        swe.set_ephe_path(ephe_path)
-        now      = datetime.now(timezone.utc)
+        now = _parse_dt(at) if at else datetime.now(timezone.utc)
         location = Location(lat=lat, lon=lon, alt=alt)
         bodies   = {}
 
-        for target in cfg.get("celestials", {}):
+        for target in targets:
+            if target not in _available_celestials:
+                continue
+
             state = _wizard.conjure_celestial_state(
                 dt         = now,
                 location   = location,
                 target     = target,
+                zodiac     = zodiac,
                 properties = ["position", "phenomenon"],
                 frames     = ["ecliptic"],
             )
+
             bodies[target] = _serialize(state)
 
         return jsonify({
