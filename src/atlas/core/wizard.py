@@ -25,13 +25,29 @@ class Wizard:
 		self._verbose = verbose
 
 
-	# Consolidates the transfer of data from observatory to state object
-	def _sync_state(self, c: CelestialState, properties: list[str], frames: list[str]):
+
+	# Sampling: reads dt and location from observatory; caller must configure observatory first
+	def _scry(self, target: str, properties: list[str], frames: list[str]) -> CelestialState:
+
+		# Get target info from configuartion
+		target_info = self._config["celestials"].get(target.lower())
+		if not target_info:
+			raise ValueError(f"Target, {target}, could not be found.")
 		
+		# Create a celestial state
+		c = CelestialState(
+			id = target_info["id"], 
+			glyph = target_info["glyph"], 
+			name = target_info["name"],
+			orbit = target_info.get("orbit", "superior"),
+			dt = self._observatory.dt,
+			location = self._observatory._location
+		)
+
 		# Apply position
 		if "position" in properties:
 			for frame in frames:
-				if frame in ("ecliptic", "equatorial"): self._observatory.project(frame)
+				if frame in ("ecliptic", "equatorial", "horizontal"): self._observatory.project(frame)
 				else: self._observatory.orient(frame)
 				pos = self._observatory.observe(c.id)
 				c.apply_pos(pos, frame)
@@ -45,7 +61,8 @@ class Wizard:
 			if self._verbose:
 				handle_log("info", "celestial phenomenon: pheno=%s", pheno, source="wizard")
 
-
+		return c
+	
 	# Cast a celestial state
 	def conjure_celestial_state(
 		self,
@@ -58,69 +75,36 @@ class Wizard:
 		frames: list[str] = ["ecliptic", "equatorial"],
 	) -> CelestialState:
 
-		# Get the SwissEph ID of the body
-		target_info = self._config["celestials"].get(target.lower())
-
-		# Raise error if the target is not found
-		if not target_info:
-			raise ValueError(f"Target, {target}, could not be found. Please check configuration.")
-
-		# Conjure celestial state
-		c = CelestialState(
-			id=target_info["id"],
-			glyph=target_info["glyph"],
-			name=target_info["name"],
-			orbit=target_info.get("orbit", "superior"),
-			dt=dt,
-			location=location  # type: ignore
-		)
-
 		# Setup observatory
 		self._observatory.set(dt=dt, location=location).align(zodiac=zodiac)
-
-		# If positional properties are requested
-		self._sync_state(c, properties=properties, frames=frames)
+		
+		# Sample the target into a celestial state		
+		c: CelestialState = self._scry(target=target, properties=properties, frames=frames)
 
 		return c
 
 	# Return a time-ordered list of states for a single body over a date range
 	def conjure_celestial_trace(
 		self,
-		target:   str,
+		target: str,
 		start_dt: datetime,
-		end_dt:   datetime,
-		step:     timedelta,
+		end_dt: datetime,
+		step: timedelta,
 		location: "Location",
-		zodiac:   str = "tropical",
-		frames:   list[str] = ["ecliptic"],
+		zodiac: str = "tropical",
+		frames: list[str] = ["ecliptic"],
 	) -> list[CelestialState]:
 		
-		target_info = self._config["celestials"].get(target.lower())
-		if not target_info:
-			raise ValueError(f"Target, {target}, could not be found.")
-
 		trace: list[CelestialState] = []
 
-		# Initialize the "session"
+		# Initialize the observatory once; loop reads dt/location from it via _scry
 		self._observatory.set(dt=start_dt, location=location).align(zodiac)
 
+		# While the observatory datetime is less than the end time given, append celestial position and increment time
 		while self._observatory.dt <= end_dt:
-			state = CelestialState(
-				id=target_info["id"],
-				glyph=target_info["glyph"],
-				name=target_info["name"],
-				orbit=target_info.get("orbit", "superior"),
-				dt=self._observatory.dt,
-				location=location
-			)
-			
-			# Use the shared sync logic without re-aligning location/zodiac
-			self._sync_state(state, ["position"], frames)
-			trace.append(state)
-
-			# Advance the observatory and the loop
+			trace.append(self._scry(target, ["position"], frames))
 			self._observatory.shift(t_delta=step)
-			
+
 		return trace
 
 
@@ -131,13 +115,19 @@ class Wizard:
 		location: "Location",
 		zodiac: str = "tropical",
 	) -> list[float]:
+		
+		# Set the observatory date
 		self._observatory.set(dt=dt, location=location)
+
+		# Set the zodiac type
 		self._observatory.align(zodiac=zodiac)
+
+		# Get the cusps
 		cusps, _ = self._observatory.cast()
 		if len(cusps) == 13:
 			return list(cusps[1:13])
+		
 		return list(cusps[:12])
-
 
 
 	# Detect transit events (aspects, ingresses, stations, phase events) over a date range
@@ -148,32 +138,39 @@ class Wizard:
 		end_dt:      datetime,
 		location:    "Location",
 		zodiac:      str = "tropical",
-		event_types: list[str] = ["aspect", "ingress", "station", "phase", "elongation"],
+		event_types: list[str] = ["aspect", "ingress", "station", "phase", "elongation", "diurnal"],
 		step:        timedelta = timedelta(hours=1),
 	) -> list[Event]:
 		events:      list[Event] = []
-		current      = start_dt
 		prev_states: Optional[list[CelestialState]] = None
 
-		while current <= end_dt:
-			states = [
-				self.conjure_celestial_state(
-					dt=current, location=location, target=t,
-					zodiac=zodiac, properties=["position", "phenomenon"], frames=["ecliptic"],
-				)
-				for t in targets
-			]
+		pos_frames = ["ecliptic", "equatorial", "horizontal"] if "diurnal" in event_types else ["ecliptic"]
+		properties = ["position", "phenomenon"]
+
+		# Validate all targets upfront
+		for t in targets:
+			if not self._config["celestials"].get(t.lower()):
+				raise ValueError(f"Target, {t}, could not be found.")
+
+		# Initialize the observatory once
+		self._observatory.set(dt=start_dt, location=location).align(zodiac=zodiac)
+
+		# While the observatory datetime is less than the end datetime
+		while self._observatory.dt <= end_dt:
+			states = [self._scry(t, properties, pos_frames) for t in targets]
 
 			if prev_states is not None:
+				current = self._observatory.dt
 				prev_dt = current - step
-				if "aspect"  in event_types: events += self._scan_aspects(states, prev_states, targets, prev_dt, current, location, zodiac)
-				if "ingress" in event_types: events += self._scan_ingresses(states, prev_states, targets, prev_dt, current, location, zodiac)
-				if "station" in event_types: events += self._scan_stations(states, prev_states, targets, prev_dt, current, location, zodiac)
-				if "phase"      in event_types: events += self._scan_phases(states, prev_states, targets, prev_dt, current, location, zodiac)
-				if "elongation" in event_types: events += self._scan_elongation(states, prev_states, targets, prev_dt, current, location, zodiac)
+				if "aspect"     in event_types: events += self._scan_aspects(states, prev_states, targets, prev_dt, current)
+				if "ingress"    in event_types: events += self._scan_ingresses(states, prev_states, targets, prev_dt, current)
+				if "station"    in event_types: events += self._scan_stations(states, prev_states, targets, prev_dt, current)
+				if "phase"      in event_types: events += self._scan_phases(states, prev_states, targets, prev_dt, current)
+				if "elongation" in event_types: events += self._scan_elongation(states, prev_states, targets, prev_dt, current)
+				if "diurnal"    in event_types: events += self._scan_diurnal(states, prev_states, targets, prev_dt, current)
 
 			prev_states = states
-			current    += step
+			self._observatory.shift(t_delta=step)
 
 		events.sort(key=lambda e: e.dt)
 		return events
@@ -189,12 +186,15 @@ class Wizard:
 				diff = self._angular_diff(a.lon, b.lon)
 				for angle, name, orb_limit in ASPECT_DEFS:
 					if abs(diff - angle) <= orb_limit:
-						aspects.append(Aspect(name=name, body_one=a, body_two=b, orb=abs(diff - angle)))
+						aspects.append(Aspect(name=name, body_one=a, body_two=b,
+						                      orb=abs(diff - angle), glyph=ASPECT_GLYPHS.get(name, "?")))
 						break
 		return aspects
 
 	# Compute cross-chart aspects between natal and transit bodies only
 	def conjure_transit_aspects(self, natal: list[CelestialState], transit: list[CelestialState]) -> list[Aspect]:
+
+		# Initialize aspects
 		aspects: list[Aspect] = []
 		for a in natal:
 			for b in transit:
@@ -203,7 +203,8 @@ class Wizard:
 				diff = self._angular_diff(a.lon, b.lon)
 				for angle, name, orb_limit in ASPECT_DEFS:
 					if abs(diff - angle) <= orb_limit:
-						aspects.append(Aspect(name=name, body_one=a, body_two=b, orb=abs(diff - angle)))
+						aspects.append(Aspect(name=name, body_one=a, body_two=b,
+						                      orb=abs(diff - angle), glyph=ASPECT_GLYPHS.get(name, "?")))
 						break
 		return aspects
 
@@ -218,25 +219,44 @@ class Wizard:
 		self,
 		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
-		location: "Location", zodiac: str,
 	) -> list[Event]:
+		
+		# Initialize aspect events
 		events: list[Event] = []
+
+		# Loop through each given celestial body
 		for i in range(len(states)):
+
+			# Loop through the proceeding celestial body
 			for j in range(i + 1, len(states)):
+
+				# Initialize each celestial state
 				a, b   = states[i], states[j]
+
+				# Initialize each previous celestial state
 				pa, pb = prev_states[i], prev_states[j]
+
+				# If an ecliptic longitude is not given, skip
 				if a.lon is None or b.lon is None or pa.lon is None or pb.lon is None:
 					continue
+
+				# Find the difference between the two angles before and after step
 				diff_now  = self._angular_diff(a.lon,  b.lon)
 				diff_prev = self._angular_diff(pa.lon, pb.lon)
+
+				# If an angle difference matches the specifications of an aspect bisect the event
 				for angle, name, orb_limit in ASPECT_DEFS:
 					res_now  = diff_now  - angle
 					res_prev = diff_prev - angle
+
+
 					if res_prev * res_now <= 0 and abs(res_now) <= orb_limit:
 						exact_dt = self._bisect_event(
-							lambda t, i=i, j=j, angle=angle: self._aspect_residual(targets[i], targets[j], t, location, zodiac, angle),
+							lambda t, i=i, j=j, angle=angle: self._aspect_residual(targets[i], targets[j], t, angle),
 							prev_dt, current,
 						)
+
+						# Append the event
 						events.append(Event(
 							type=    "aspect",
 							dt=      exact_dt,
@@ -246,6 +266,7 @@ class Wizard:
 							glyph=   ASPECT_GLYPHS.get(name, '?'),
 							orb=     0.0,
 						))
+
 						break
 		return events
 
@@ -254,7 +275,6 @@ class Wizard:
 		self,
 		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
-		location: "Location", zodiac: str,
 	) -> list[Event]:
 		from atlas.models.celestial_state import SIGNS
 		events: list[Event] = []
@@ -264,7 +284,7 @@ class Wizard:
 			if int(state.lon // 30) != int(prev.lon // 30):
 				sign_name = SIGNS[int(state.lon // 30) % 12][1]
 				exact_dt  = self._bisect_event(
-					lambda t, k=k: self._ingress_residual(targets[k], t, location, zodiac),
+					lambda t, k=k: self._ingress_residual(targets[k], t),
 					prev_dt, current,
 				)
 				events.append(Event(
@@ -281,7 +301,6 @@ class Wizard:
 		self,
 		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
-		location: "Location", zodiac: str,
 	) -> list[Event]:
 		events: list[Event] = []
 		for k, (state, prev) in enumerate(zip(states, prev_states)):
@@ -289,7 +308,7 @@ class Wizard:
 				continue
 			if prev.dlon * state.dlon < 0:
 				exact_dt = self._bisect_event(
-					lambda t, k=k: self._station_residual(targets[k], t, location, zodiac),
+					lambda t, k=k: self._station_residual(targets[k], t),
 					prev_dt, current,
 				)
 				events.append(Event(
@@ -306,27 +325,25 @@ class Wizard:
 		self,
 		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
-		location: "Location", zodiac: str,
 	) -> list[Event]:
 		events: list[Event] = []
 		for k, (state, prev) in enumerate(zip(states, prev_states)):
-			# Only inferior planets and satellites have crossing-based phase events
 			if state.orbit not in ("inferior", "satellite"):
 				continue
 			ang_now  = state.phase_cycle
 			ang_prev = prev.phase_cycle
 			if ang_now is None or ang_prev is None:
 				continue
-			body_glyph = self._config["celestials"].get(targets[k], {}).get("glyph", "?")
-			for target_angle, label, _ in PHASE_DEFS:
+			for target_angle, label, phase_glyph in PHASE_DEFS:
 				res_now  = self._normalize_residual(ang_now  - target_angle)
 				res_prev = self._normalize_residual(ang_prev - target_angle)
 				if res_prev * res_now <= 0 and abs(res_now) < 90:
 					exact_dt = self._bisect_event(
-						lambda t, k=k, ta=target_angle: self._phase_residual(targets[k], t, location, zodiac, ta),
+						lambda t, k=k, ta=target_angle: self._phase_residual(targets[k], t, ta),
 						prev_dt, current,
 					)
-					events.append(Event(type="phase", dt=exact_dt, body=state.name, detail=label.format(name=state.name), glyph=body_glyph))
+					events.append(Event(type="phase", dt=exact_dt, body=state.name,
+					                    detail=label.format(name=state.name.capitalize()), glyph=phase_glyph))
 		return events
 
 	# Detect synodic crossing events for superior planets (conjunction, quadrature, opposition)
@@ -334,27 +351,68 @@ class Wizard:
 		self,
 		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
-		location: "Location", zodiac: str,
 	) -> list[Event]:
 		events: list[Event] = []
 		for k, (state, prev) in enumerate(zip(states, prev_states)):
-			if state.orbit != "superior":
-				continue
 			ang_now  = state.elong_cycle
 			ang_prev = prev.elong_cycle
 			if ang_now is None or ang_prev is None:
 				continue
-			body_glyph = self._config["celestials"].get(targets[k], {}).get("glyph", "?")
-			for target_angle, label, glyph in ELONGATION_EVENTS:
+			for target_angle, label, elong_glyph in ELONGATION_EVENTS:
 				res_now  = self._normalize_residual(ang_now  - target_angle)
 				res_prev = self._normalize_residual(ang_prev - target_angle)
 				if res_prev * res_now <= 0 and abs(res_now) < 90:
 					exact_dt = self._bisect_event(
-						lambda t, k=k, ta=target_angle: self._elong_residual(targets[k], t, location, zodiac, ta),
+						lambda t, k=k, ta=target_angle: self._elong_residual(targets[k], t, ta),
 						prev_dt, current,
 					)
 					events.append(Event(type="elongation", dt=exact_dt, body=state.name,
-					                    detail=label.format(name=state.name), glyph=body_glyph))
+					                    detail=label.format(name=state.name.capitalize()), glyph=elong_glyph))
+		return events
+
+	# Detect daily angular crossings: rising, setting, culmination, anti-culmination
+	def _scan_diurnal(
+		self,
+		states: list[CelestialState], prev_states: list[CelestialState],
+		targets: list[str], prev_dt: datetime, current: datetime,
+	) -> list[Event]:
+		events: list[Event] = []
+		for k, (state, prev) in enumerate(zip(states, prev_states)):
+			if state.alt is None or state.ha is None or prev.alt is None or prev.ha is None:
+				continue
+
+			# Rising: altitude crosses 0 from below
+			if prev.alt <= 0 < state.alt:
+				exact_dt = self._bisect_event(
+					lambda t, k=k: self._diurnal_residual(targets[k], t, "rising"),
+					prev_dt, current,
+				)
+				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="rising",           glyph="↑"))
+
+			# Setting: altitude crosses 0 from above
+			if prev.alt >= 0 > state.alt:
+				exact_dt = self._bisect_event(
+					lambda t, k=k: self._diurnal_residual(targets[k], t, "setting"),
+					prev_dt, current,
+				)
+				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="setting",          glyph="↓"))
+
+			# Culmination: hour angle crosses 0 from negative (upper transit)
+			if prev.ha <= 0 < state.ha:
+				exact_dt = self._bisect_event(
+					lambda t, k=k: self._diurnal_residual(targets[k], t, "culmination"),
+					prev_dt, current,
+				)
+				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="culmination",      glyph="⊕"))
+
+			# Anti-culmination: hour angle crosses ±180 (lower transit)
+			if abs(prev.ha) > 150 and abs(state.ha) > 150 and prev.ha * state.ha < 0:
+				exact_dt = self._bisect_event(
+					lambda t, k=k: self._diurnal_residual(targets[k], t, "anti-culmination"),
+					prev_dt, current,
+				)
+				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="anti-culmination", glyph="⊗"))
+
 		return events
 
 	# -------------------------------------------------------------------------
@@ -390,35 +448,53 @@ class Wizard:
 		return t_lo + (t_hi - t_lo) / 2
 
 	# Residual for aspect bisection: angular diff between two bodies minus target angle
-	def _aspect_residual(self, target_a: str, target_b: str, dt: datetime, location: "Location", zodiac: str, angle: float) -> float:
-		a = self.conjure_celestial_state(dt=dt, location=location, target=target_a, zodiac=zodiac, properties=["position"], frames=["ecliptic"])
-		b = self.conjure_celestial_state(dt=dt, location=location, target=target_b, zodiac=zodiac, properties=["position"], frames=["ecliptic"])
+	def _aspect_residual(self, target_a: str, target_b: str, dt: datetime, angle: float) -> float:
+		self._observatory.set(dt=dt)
+		a = self._scry(target_a, ["position"], ["ecliptic"])
+		b = self._scry(target_b, ["position"], ["ecliptic"])
 		if a.lon is None or b.lon is None:
 			return 0.0
 		return self._angular_diff(a.lon, b.lon) - angle
 
 	# Residual for ingress bisection: fractional sign position (crosses 0 at sign boundary)
-	def _ingress_residual(self, target: str, dt: datetime, location: "Location", zodiac: str) -> float:
-		state = self.conjure_celestial_state(dt=dt, location=location, target=target, zodiac=zodiac, properties=["position"], frames=["ecliptic"])
+	def _ingress_residual(self, target: str, dt: datetime) -> float:
+		self._observatory.set(dt=dt)
+		state = self._scry(target, ["position"], ["ecliptic"])
 		if state.lon is None:
 			return 0.0
 		return (state.lon % 30) - 15
 
 	# Residual for station bisection: dlon crosses 0 at station moment
-	def _station_residual(self, target: str, dt: datetime, location: "Location", zodiac: str) -> float:
-		state = self.conjure_celestial_state(dt=dt, location=location, target=target, zodiac=zodiac, properties=["position"], frames=["ecliptic"])
+	def _station_residual(self, target: str, dt: datetime) -> float:
+		self._observatory.set(dt=dt)
+		state = self._scry(target, ["position"], ["ecliptic"])
 		return state.dlon or 0.0
 
 	# Residual for phase bisection: body's phase_cycle angle minus target phase angle
-	def _phase_residual(self, target: str, dt: datetime, location: "Location", zodiac: str, target_angle: float) -> float:
-		state = self.conjure_celestial_state(dt=dt, location=location, target=target, zodiac=zodiac, properties=["phenomenon"], frames=["ecliptic"])
+	def _phase_residual(self, target: str, dt: datetime, target_angle: float) -> float:
+		self._observatory.set(dt=dt)
+		state = self._scry(target, ["phenomenon"], ["ecliptic"])
 		if state.phase_cycle is None:
 			return 0.0
 		return self._normalize_residual(state.phase_cycle - target_angle)
 
 	# Residual for elongation bisection: elong_cycle minus target synodic angle
-	def _elong_residual(self, target: str, dt: datetime, location: "Location", zodiac: str, target_angle: float) -> float:
-		state = self.conjure_celestial_state(dt=dt, location=location, target=target, zodiac=zodiac, properties=["phenomenon"], frames=["ecliptic"])
+	def _elong_residual(self, target: str, dt: datetime, target_angle: float) -> float:
+		self._observatory.set(dt=dt)
+		state = self._scry(target, ["phenomenon"], ["ecliptic"])
 		if state.elong_cycle is None:
 			return 0.0
 		return self._normalize_residual(state.elong_cycle - target_angle)
+
+	# Residual for diurnal bisection: altitude (horizon) or hour angle (culmination/anti-culmination)
+	def _diurnal_residual(self, target: str, dt: datetime, crossing_type: str) -> float:
+		self._observatory.set(dt=dt)
+		state = self._scry(target, ["position"], ["horizontal"])
+		match crossing_type:
+			case "rising" | "setting":
+				return state.alt or 0.0
+			case "culmination":
+				return state.ha or 0.0
+			case "anti-culmination":
+				return self._normalize_residual((state.ha or 0.0) - 180)
+		return 0.0

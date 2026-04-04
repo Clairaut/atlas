@@ -32,3 +32,4 @@ class Aspect:
     body_one: "CelestialState"
     body_two: "CelestialState"
     orb:      float
+    glyph:    str = ""

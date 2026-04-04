@@ -77,9 +77,13 @@ class CelestialState:
 	dlat: Optional[float] = field(init=False, default=None)
 
 	ra: Optional[float] = field(init=False, default=None)			# Equatorial (deg)
-	dec: Optional[float] = field(init=False, default=None)			
+	dec: Optional[float] = field(init=False, default=None)
 	dra: Optional[float] = field(init=False, default=None)			# Equatorial
 	ddec: Optional[float] = field(init=False, default=None)
+
+	alt: Optional[float] = field(init=False, default=None)			# Horizontal (deg)
+	az: Optional[float] = field(init=False, default=None)
+	ha: Optional[float] = field(init=False, default=None)			# Hour angle [-180, 180]
 
 	phase_angle: Optional[float] = field(init=False, default=None)
 	phase_illuminated: Optional[float] = field(init=False, default=None)
@@ -87,6 +91,7 @@ class CelestialState:
 	app_diam: Optional[float] = field(init=False, default=None)
 	app_mag: Optional[float] = field(init=False, default=None)
 	waxing: Optional[bool] = field(init=False, default=None)
+	waxing_elong: Optional[bool] = field(init=False, default=None)  # elongation-based, for elong_cycle
 
 	@property
 	def retrograde(self) -> bool:
@@ -121,34 +126,32 @@ class CelestialState:
 					raise ValueError(f"phase data not available for {self.name} — load phenomenon data first")
 				for threshold, name_tpl, glyph in SUPERIOR_PHASE_DEFS:
 					if self.phase_illuminated >= threshold:
-						return (name_tpl.format(name=self.name), glyph)
+						return (name_tpl.format(name=self.name.capitalize()), glyph)
 			case "inferior" | "satellite":
-				# Full 0-360° cycle via phase_cycle
-				# Offset by 180° because SwissEph phase_angle=0 is superior conjunction (full appearance),
-				# whereas PHASE_DEFS angle 0 = new. The offset aligns them.
+				# Full 0-360° cycle via phase_cycle (0°=new, 180°=full, matches PHASE_DEFS directly)
 				cycle = self.phase_cycle
 				if cycle is None:
 					raise ValueError(f"phase data not available for {self.name} — load phenomenon data first")
-				corrected = (cycle + 180) % 360
-				_, name_tpl, glyph = min(PHASE_DEFS, key=lambda p: abs(((corrected - p[0] + 180) % 360) - 180))
-				return (name_tpl.format(name=self.name), glyph)
+				_, name_tpl, glyph = min(PHASE_DEFS, key=lambda p: abs(((cycle - p[0] + 180) % 360) - 180))
+				return (name_tpl.format(name=self.name.capitalize()), glyph)
 		return None  # star or unknown
 
 	@property
 	def phase_cycle(self) -> Optional[float]:
-		# 0-360° monotonic cycle from SwissEph phase_angle + waxing (inferior planets / Moon)
+		# 0-360° monotonic cycle mapped from SwissEph phase_angle (Sun-body-Earth, 180°=new, 0°=full)
 		# 0° = new, 90° = first quarter, 180° = full, 270° = last quarter
 		if self.phase_angle is None or self.waxing is None:
 			return None
-		return self.phase_angle if self.waxing else 360.0 - self.phase_angle
+		# phase_angle decreases new→full (180°→0°), so invert to get an increasing 0→360° cycle
+		return (180.0 - self.phase_angle) if self.waxing else (180.0 + self.phase_angle)
 
 	@property
 	def elong_cycle(self) -> Optional[float]:
-		# 0-360° monotonic synodic cycle from elongation + waxing (superior planets)
+		# 0-360° monotonic synodic cycle from elongation + waxing_elong (superior planets)
 		# 0° = conjunction, 90° = eastern quadrature, 180° = opposition, 270° = western quadrature
-		if self.elong is None or self.waxing is None:
+		if self.elong is None or self.waxing_elong is None:
 			return None
-		return self.elong if self.waxing else 360.0 - self.elong
+		return self.elong if self.waxing_elong else 360.0 - self.elong
 
 
 	# Apply celestial position to state
@@ -164,10 +167,15 @@ class CelestialState:
 					self.ra, self.dec, self.dist, self.dra, self.ddec, self.ddist = pos
 				else:
 					raise ValueError(f"Expected 6 values for equatorial position, got {len(pos)}: {pos}")
+			case "horizontal":
+				if len(pos) == 3:
+					self.alt, self.az, self.ha = pos
+				else:
+					raise ValueError(f"Expected 3 values for horizontal position, got {len(pos)}: {pos}")
 
 	# Apply celestial phenomenon to state
-	def apply_pheno(self, pheno: tuple[float, float, float, float, float, bool]) -> None:
-		if len(pheno) != 6:
-			raise ValueError(f"Expected 6 values for phenomenon, got {len(pheno)}: {pheno}")
-		self.phase_angle, self.phase_illuminated, self.elong, self.app_diam, self.app_mag, self.waxing = pheno
+	def apply_pheno(self, pheno: tuple) -> None:
+		if len(pheno) != 7:
+			raise ValueError(f"Expected 7 values for phenomenon, got {len(pheno)}: {pheno}")
+		self.phase_angle, self.phase_illuminated, self.elong, self.app_diam, self.app_mag, self.waxing, self.waxing_elong = pheno
 

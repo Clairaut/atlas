@@ -308,8 +308,8 @@ class Chart(moderngl_window.WindowConfig): # type: ignore
 
     # Capture the current framebuffer and save as a PNG image
     def _save_screenshot(self, path: str):
-        w, h = self.wnd.size
-        data = self.ctx.screen.read()
+        x, y, w, h = self.wnd.viewport
+        data = self.ctx.screen.read(viewport=(x, y, w, h))
         img  = Image.frombytes('RGB', (w, h), data)
         img  = img.transpose(Image.FLIP_TOP_BOTTOM) # type: ignore
         img.save(path)
@@ -450,7 +450,8 @@ class Chart(moderngl_window.WindowConfig): # type: ignore
 #--------------#
 
 class RadixChart(Chart):
-    title = "Radix Chart"
+    title        = "Radix Chart"
+    _chart_title = "Radix Chart"   # user-set title, never overwritten by dynamic updates
 
     # Class-level data (set via configure() before run_window_config())
     _cusps:      list[float] = []
@@ -476,12 +477,13 @@ class RadixChart(Chart):
     @classmethod
     def configure(cls, cusps: list[float], celestials: list, aspects: list = [],
                   title: str = "Radix Chart", save_path: Optional[str] = None):
-        cls._cusps      = cusps
-        cls._celestials = celestials
-        cls._aspects    = aspects
-        cls.title       = title
-        cls._save_path  = save_path
-        cls._save_done  = False
+        cls._cusps        = cusps
+        cls._celestials   = celestials
+        cls._aspects      = aspects
+        cls.title         = title
+        cls._chart_title  = title
+        cls._save_path    = save_path
+        cls._save_done    = False
 
     @classmethod
     def show(cls):
@@ -510,6 +512,9 @@ class RadixChart(Chart):
         # Four concentric rings
         for r in [self.R_INNER, self.R_MID, self.R_OUTER, self.R_RIM]:
             self._add_circle(r, WHITE)
+
+        # User-set title — stable, never overwritten by dynamic playback updates
+        self._add_text(self.__class__._chart_title, 0.0, 1.1, self.TEXT_SIZE * 0.8, WHITE)
 
         # Degree tick marks on the outer ring
         one_deg = np.linspace(0, 2 * math.pi, 360, endpoint=False) + math.radians(15) - self._base_rad
@@ -720,8 +725,10 @@ class LiveRadixChart(RadixChart):
 
         original_celestials = cls._celestials
         original_cusps      = cls._cusps
+        original_aspects    = cls._aspects
         cls._celestials     = interp
         cls._cusps          = interp_cusps
+        cls._aspects        = cls._wizard.conjure_aspects(interp)
         self._reset_geometry()
         self._base_rad = math.radians(interp_cusps[0]) - math.pi
         self._mc_rad   = math.radians(interp_cusps[9]) - self._base_rad
@@ -729,6 +736,7 @@ class LiveRadixChart(RadixChart):
         self._upload_geometry()
         cls._celestials = original_celestials
         cls._cusps      = original_cusps
+        cls._aspects    = original_aspects
 
     def on_render(self, time: float, frame_time: float):
         now     = self._time_mod.monotonic()
@@ -759,6 +767,9 @@ class PlaybackChart(LiveRadixChart):
     _current_step: int   = 0
     _total_steps:  int   = 1
     _paused:       bool  = False
+    _ff_speed:     int   = 1     # fast-forward multiplier — doubles/halves with shift+arrows
+    _ff_speed_prev: int  = 0     # speed before hitting the ceiling, for clean step-back
+    _ff_speed_max: int   = 1     # ceiling: step * ff_speed <= ~10h
     UPDATE_INTERVAL: float = 1.0  # seconds per step (overrides LiveRadixChart default)
 
     # Video export state
@@ -783,13 +794,22 @@ class PlaybackChart(LiveRadixChart):
         # Pre-compute total steps for progress display
         total_secs = (end_dt - start_dt).total_seconds()
         step_secs  = step.total_seconds()
-        cls._total_steps = max(1, int(total_secs / step_secs) + 1)
+        cls._total_steps  = max(1, int(total_secs / step_secs) + 1)
+        cls._ff_speed     = 1
+        cls._ff_speed_max = max(1, int(36000 / step_secs))  # ~10h ceiling
+
+    # Build and apply the playback title from current state
+    def _update_title(self, dt: Any = None, step: int = 0):
+        cls   = self.__class__
+        dt    = dt or cls._current_dt
+        tot   = cls._total_steps
+        pct   = int(step / tot * 100)
+        speed = f"  {cls._ff_speed}x" if cls._ff_speed > 1 else ""
+        cls.title = dt.strftime(f"Playback  —  %Y-%m-%d  %H:%M  [{step}/{tot}  {pct}%]{speed}")
 
     # Load chart data for a specific datetime without advancing the playback pointer
     def _load_at(self, dt: Any, step: int):
-        tot = self.__class__._total_steps
-        pct = int(step / tot * 100)
-        self.__class__.title = dt.strftime(f"Playback  —  %Y-%m-%d  %H:%M  [{step}/{tot}  {pct}%]")
+        self._update_title(dt, step)
 
         celestials = []
         for target in self.__class__._targets:
@@ -822,11 +842,12 @@ class PlaybackChart(LiveRadixChart):
         cur = self.__class__._current_step
         self._load_at(dt, cur)
 
-        # Advance time, stop at end
-        next_dt = dt + self.__class__._play_step
+        # Advance time by ff_speed steps — keeps computation rate constant at any speed
+        skip    = self.__class__._ff_speed
+        next_dt = dt + self.__class__._play_step * skip
         if next_dt <= self.__class__._end_dt:
             self.__class__._current_dt   = next_dt
-            self.__class__._current_step = cur + 1
+            self.__class__._current_step = cur + skip
 
     # Step one frame in either direction (direction: +1 forward, -1 backward)
     def _step(self, direction: int):
@@ -842,21 +863,40 @@ class PlaybackChart(LiveRadixChart):
         self._load_at(new_dt, new_step)
         self._rebuild_interpolated(0.0)
 
-    # Spacebar: pause/play — arrow keys: step one frame while paused or playing
+    # Spacebar: pause/play — arrows: step — shift+arrows: double/halve speed
     def on_key_event(self, key: Any, action: Any, modifiers: Any):
         if action != self.wnd.keys.ACTION_PRESS:
             return
+        cls = self.__class__
         if key == self.wnd.keys.SPACE:
-            self.__class__._paused = not self.__class__._paused
+            cls._paused = not cls._paused
             self._rebuild_interpolated(0.0)
         elif key == self.wnd.keys.RIGHT:
-            self._step(1)
+            if modifiers.shift:
+                if cls._ff_speed < cls._ff_speed_max:
+                    new = cls._ff_speed * 2
+                    if new >= cls._ff_speed_max:
+                        cls._ff_speed_prev = cls._ff_speed   # remember pre-cap speed
+                        cls._ff_speed      = cls._ff_speed_max
+                    else:
+                        cls._ff_speed = new
+                self._update_title(step=cls._current_step)
+            else:
+                self._step(1)
         elif key == self.wnd.keys.LEFT:
-            self._step(-1)
+            if modifiers.shift:
+                if cls._ff_speed >= cls._ff_speed_max and cls._ff_speed_prev:
+                    cls._ff_speed      = cls._ff_speed_prev
+                    cls._ff_speed_prev = 0
+                else:
+                    cls._ff_speed = max(1, cls._ff_speed // 2)
+                self._update_title(step=cls._current_step)
+            else:
+                self._step(-1)
 
-    # Returns the playback step duration in seconds for velocity extrapolation
+    # Returns the effective calendar seconds per tick, accounting for fast-forward speed
     def _get_step_secs(self) -> float:
-        return self.__class__._play_step.total_seconds()
+        return self.__class__._play_step.total_seconds() * self.__class__._ff_speed
 
     def on_render(self, time: float, frame_time: float):
         cls = self.__class__
@@ -894,9 +934,10 @@ class PlaybackChart(LiveRadixChart):
             return
 
         pct   = cur / tot
+        speed = self.__class__._ff_speed
         label = dt.strftime("%Y-%m-%d  %H:%M")
-        if self.__class__._paused:
-            label += "  paused"
+        if speed > 1:   label += f"  {speed}x"
+        if self.__class__._paused: label += "  paused"
         self._add_text(label, 0.0, -1.08, self.TEXT_SIZE * 0.9, WHITE)
 
         # Progress bar: a dim base line + a filled portion on top
@@ -912,7 +953,7 @@ class PlaybackChart(LiveRadixChart):
 
         # Key hint shown when paused
         if self.__class__._paused:
-            self._add_text("space  play    left right  step", 0.0, -1.19, self.TEXT_SIZE * 0.7, DIM_LINE)
+            self._add_text("space  play    arrows  step    shift+arrows  speed", 0.0, -1.19, self.TEXT_SIZE * 0.7, DIM_LINE)
 
     # Encode accumulated frames as an MP4 video using imageio+ffmpeg
     def _encode_video(self, path: str):

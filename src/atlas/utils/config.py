@@ -14,6 +14,10 @@ DEFAULT_CONFIG = """# Atlas configuration
 [ephemeris]
 path = ""
 
+[output]
+image = ""   # default save path for static charts (.png)
+video = ""   # default save path for playback exports (.mp4)
+
 [location]
 lat = 0.00
 lon = 0.00

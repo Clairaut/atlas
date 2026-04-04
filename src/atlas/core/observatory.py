@@ -190,6 +190,7 @@ class Observatory:
 			handle_log("info", "ok observatory alignment (zodiac=%s, aya=%s, flags=%s)", zodiac, aya, self._ephe_client.flags)
 		return self
 	
+	# Set coordinate system; delegates entirely to ephe_client
 	def project(self, system: str):
 		self._ephe_client.set_coord_system(system)
 		if self._verbose:
@@ -224,7 +225,7 @@ class Observatory:
 		if not self._location:
 			handle_log("error", "bad observatory cast: location is not yet set")
 			raise ValueError("Failed to cast observatory cusps/ascmc: location is not yet set")
-		cusps, ascmc = self._ephe_client.query_houses(self._jd, self._location.lat, self._location.lon, self._hsys.encode())
+		cusps, ascmc = self._ephe_client.query_houses(self._jd, self._location.lat, self._location.lon, self._hsys.encode()) # type: ignore
 		
 		if self._verbose:
 			handle_log("info", "ok observatory cast (dt=%s, location=%s)", self.dt, self._location)
@@ -254,11 +255,14 @@ class Observatory:
 		pheno_now = self._ephe_client.query_pheno(target_id, self._jd)
 		pheno_prev = self._ephe_client.query_pheno(target_id, self._jd - 1e-5)
 
-		# Determine waxing/waning
+		# Illumination-based waxing
 		waxing = pheno_now[1] >= pheno_prev[1]
 
+		# Elongation-based waxing
+		waxing_elong = pheno_now[2] >= pheno_prev[2] # type: ignore
+
 		# Stitch result
-		result = (*pheno_now, waxing)
+		result = (*pheno_now, waxing, waxing_elong)
 
 		if self._verbose:
 			handle_log(
