@@ -184,6 +184,26 @@ def _build_parser() -> argparse.ArgumentParser:
     seek_parser.add_argument("-z", "--zodiac",   help="zodiac type",                                         choices=["tropical", "sidereal"], default="tropical")
     seek_parser.add_argument("-c", "--concise",  help="compact output",                                      action="store_true")
 
+    # serve subparser
+    serve_parser = subparsers.add_parser(
+        name  = "serve",
+        help  = "start the Atlas REST API server",
+        usage = "atlas serve [options]"
+    )
+    serve_parser.add_argument("--host", help="bind host (default 127.0.0.1)", default="127.0.0.1")
+    serve_parser.add_argument("--port", help="bind port (default 5001)",       type=int, default=5001)
+
+    # view subparser
+    view_parser = subparsers.add_parser(
+        name  = "view",
+        help  = "open the Atlas sky viewer (requires atlas-viewer)",
+        usage = "atlas view [options]"
+    )
+    view_parser.add_argument("--at",           help="datetime to view 'YYYY-MM-DD [HH:MM[:SS]]'", nargs="?", default=None)
+    view_parser.add_argument("--live",         help="real-time mode (default when --at is omitted)", action="store_true")
+    view_parser.add_argument("-l", "--location", help="location '(lat,lon,alt)'",                  nargs="?", default=default_location_str)
+    view_parser.add_argument("-z", "--zodiac",   help="zodiac type",                                choices=["tropical", "sidereal"], default="tropical")
+
     return parser
 
 
@@ -426,6 +446,8 @@ def _handle_command(args):
         _handle_observe(args)
     elif args.command == "seek":
         _handle_seek(args)
+    elif args.command == "serve":
+        _handle_serve(args)
     elif args.command == "chart":
         if getattr(args, "targets", None) == ["live"]:
             _handle_live(args)
@@ -768,6 +790,17 @@ def _handle_seek(args):
 
     except Exception:
         handle_log("error", "failed to handle seek command", source="cli")
+        traceback.print_exc()
+
+
+def _handle_serve(args):
+    try:
+        from atlas.serve import run
+        run(host=args.host, port=args.port)
+    except ImportError:
+        print("Flask is not installed. Run: pip install flask")
+    except Exception:
+        handle_log("error", "failed to start server", source="cli")
         traceback.print_exc()
 
 
