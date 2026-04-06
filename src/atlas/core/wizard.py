@@ -114,13 +114,15 @@ class Wizard:
 		dt: datetime,
 		location: "Location",
 		zodiac: str = "tropical",
+		hsys: str = "placidus",
 	) -> list[float]:
-		
+
 		# Set the observatory date
 		self._observatory.set(dt=dt, location=location)
 
-		# Set the zodiac type
+		# Set the zodiac type and house system
 		self._observatory.align(zodiac=zodiac)
+		self._observatory.domify(hsys)
 
 		# Get the cusps
 		cusps, _ = self._observatory.cast()
@@ -141,6 +143,8 @@ class Wizard:
 		event_types: list[str] = ["aspect", "ingress", "station", "phase", "elongation", "diurnal"],
 		step:        timedelta = timedelta(hours=1),
 	) -> list[Event]:
+		
+		# Initialize events list
 		events:      list[Event] = []
 		prev_states: Optional[list[CelestialState]] = None
 
@@ -178,12 +182,20 @@ class Wizard:
 	# Compute all aspects between a list of celestial states (pure geometry, no ephemeris calls)
 	def conjure_aspects(self, celestials: list[CelestialState]) -> list[Aspect]:
 		aspects: list[Aspect] = []
+
+		# Loop through each celestial
 		for i in range(len(celestials)):
+
+			# Loop through every other celestial
 			for j in range(i + 1, len(celestials)):
 				a, b = celestials[i], celestials[j]
 				if a.lon is None or b.lon is None:
 					continue
+
+				# Find the angular difference between the two celestials
 				diff = self._angular_diff(a.lon, b.lon)
+
+				# If the angular difference falls within the orb of an aspect, append it to aspects
 				for angle, name, orb_limit in ASPECT_DEFS:
 					if abs(diff - angle) <= orb_limit:
 						aspects.append(Aspect(name=name, body_one=a, body_two=b,
@@ -196,23 +208,32 @@ class Wizard:
 
 		# Initialize aspects
 		aspects: list[Aspect] = []
+
+		# Loop through each natal celestial
 		for a in natal:
+
+			# Loop through each transit celestial
 			for b in transit:
 				if a.lon is None or b.lon is None:
 					continue
+
+				# Find the angular difference between the celestials
 				diff = self._angular_diff(a.lon, b.lon)
+
+				# If the angle difference falls within the orb of an aspect, append the aspect.
 				for angle, name, orb_limit in ASPECT_DEFS:
 					if abs(diff - angle) <= orb_limit:
 						aspects.append(Aspect(name=name, body_one=a, body_two=b,
 						                      orb=abs(diff - angle), glyph=ASPECT_GLYPHS.get(name, "?")))
 						break
+
 		return aspects
 
 
 
-	# -------------------------------------------------------------------------
-	# Scan helpers — detect event crossings between two consecutive timesteps
-	# -------------------------------------------------------------------------
+	 # ========== #
+	# SCAN HELPERS #
+	 # ========== #
 
 	# Detect pairwise aspect crossings between prev and current timestep
 	def _scan_aspects(
@@ -415,9 +436,10 @@ class Wizard:
 
 		return events
 
-	# -------------------------------------------------------------------------
-	# Geometry helpers
-	# -------------------------------------------------------------------------
+
+	 # ============== #
+	# GEOMETRY HELPERS #
+	 # ============== #
 
 	# Shortest angular distance between two ecliptic longitudes [0, 180]
 	@staticmethod
@@ -431,9 +453,10 @@ class Wizard:
 		angle = angle % 360
 		return angle - 360 if angle > 180 else angle
 
-	# -------------------------------------------------------------------------
-	# Bisection helpers — scalar crossing functions for exact event timing
-	# -------------------------------------------------------------------------
+
+	 # =============== #
+	# BISECTION HELPERS #
+	 # =============== #
 
 	# Binary search between two datetimes to find exact crossing moment (1-minute tolerance)
 	def _bisect_event(self, residual_fn, t_lo: datetime, t_hi: datetime) -> datetime:

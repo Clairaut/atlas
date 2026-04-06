@@ -215,7 +215,7 @@ atlas serve                          # start on 127.0.0.1:5001
 atlas serve --port 8080              # custom port
 
 curl "http://127.0.0.1:5001/observe"
-curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T12:00:00"
+curl "1http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T12:00:00"
 curl "http://127.0.0.1:5001/observe?zodiac=sidereal&lat=48.85&lon=2.35"
 ```
 
@@ -223,7 +223,7 @@ curl "http://127.0.0.1:5001/observe?zodiac=sidereal&lat=48.85&lon=2.35"
 
 ## Configuration
 
-Atlas reads from a config file (typically `~/.atlas/config.yaml` or project-local). Key sections:
+Atlas reads from `~/.config/atlas/atlas.toml`, creating a default if missing. Key sections:
 
 - **`location`** — default observer lat/lon/alt used when `--location` is not specified
 - **`celestials`** — body registry: SwissEph ID, glyph, name, orbit type

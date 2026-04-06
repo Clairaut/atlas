@@ -31,13 +31,13 @@ def _serialize(state: CelestialState) -> dict:
         "elong":           state.elong,
         "app_mag":         state.app_mag,
         "app_diam":        state.app_diam,
-        "illuminated_pct": round((state.phase_illuminated or 0) * 100, 1),
         "retrograde":      state.retrograde,
         "sign":            sign_name,
         "sign_glyph":      sign_glyph,
         "orb":             round(state.orb, 4),
         "phase":           phase[0] if phase else None,
         "phase_glyph":     phase[1] if phase else None,
+        "phase_illuminated": round((state.phase_illuminated or 0), 1)
     }
 
 
@@ -68,17 +68,40 @@ def create_app() -> "Flask":
             except ValueError:
                 continue
         raise ValueError(f"unrecognized datetime format: '{s}'")
+    
+
+    # Return house cusps for a given time, location, and house system
+    @app.get("/cast")
+    def cast():
+        at: str = request.args.get("at", default="", type=str)  # type: ignore
+        zodiac: str = request.args.get("zodiac", default="tropical", type=str)  # type: ignore
+        hsys: str = request.args.get("hsys", default="placidus", type=str)  # type: ignore
+        lat: float = request.args.get("lat", default=_lat, type=float)  # type: ignore
+        lon: float = request.args.get("lon", default=_lon, type=float)  # type: ignore
+        alt: float = request.args.get("alt", default=_alt, type=float)  # type: ignore
+
+        now = _parse_dt(at) if at else datetime.now(timezone.utc)
+        location = Location(lat=lat, lon=lon, alt=alt)
+
+        cusps = _wizard.conjure_houses(dt=now, location=location, zodiac=zodiac, hsys=hsys)
+
+        return jsonify({
+            "dt": now.isoformat(),
+            "location": {"lat": lat, "lon": lon, "alt": alt},
+            "hsys": hsys,
+            "cusps": {str(i + 1): round(c, 6) for i, c in enumerate(cusps)},
+        })
 
     # Return current positions for requested celestial bodies
     @app.get("/observe")
     def observe():
         raw_targets: str = request.args.get("targets", default="", type=str)  # type: ignore
         targets: list[str] = [t.strip() for t in raw_targets.split(",") if t.strip()] or _available_celestials
-        at: str            = request.args.get("at",     default="",          type=str)   # type: ignore
-        zodiac: str        = request.args.get("zodiac", default="tropical",  type=str)   # type: ignore
-        lat: float         = request.args.get("lat",    default=_lat,        type=float) # type: ignore
-        lon: float         = request.args.get("lon",    default=_lon,        type=float) # type: ignore
-        alt: float         = request.args.get("alt",    default=_alt,        type=float) # type: ignore
+        at: str = request.args.get("at", default="", type=str)  # type: ignore
+        zodiac: str = request.args.get("zodiac", default="tropical", type=str)  # type: ignore
+        lat: float = request.args.get("lat", default=_lat, type=float)  # type: ignore
+        lon: float = request.args.get("lon", default=_lon, type=float)  # type: ignore
+        alt: float = request.args.get("alt", default=_alt, type=float)  # type: ignore
 
         now = _parse_dt(at) if at else datetime.now(timezone.utc)
         location = Location(lat=lat, lon=lon, alt=alt)

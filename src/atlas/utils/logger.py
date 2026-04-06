@@ -18,6 +18,14 @@ _LEVELS = {
 	"critical": logging.CRITICAL,
 }
 
+class _DefaultSource(logging.Filter):
+    # Inject a default source field for records that don't provide one
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "source"):
+            record.source = "atlas"  # type: ignore
+        return True
+
+
 _logger = logging.getLogger("atlas")
 if not _logger.handlers:
 	_logger.setLevel(logging.DEBUG)
@@ -36,6 +44,7 @@ if not _logger.handlers:
 
 	_logger.addHandler(file_handler)
 	_logger.addHandler(stream_handler)
+	_logger.addFilter(_DefaultSource())
 
 
 def handle_log(level: str, message: str, *args, source: str = "atlas", **kwargs):
