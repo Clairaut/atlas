@@ -58,6 +58,14 @@ def create_app() -> "Flask":
 
     app = Flask(__name__)
 
+    # Ensure SwissEph path is set per-request (thread-local state may not carry over)
+    @app.before_request
+    def _ensure_ephe_path():
+        try:
+            _client.set_ephe_path(ephe_path)
+        except Exception:
+            _client.set_ephe_path(os.fspath(Path.home() / ".ephe"))
+
     _available_celestials = list(cfg.get("celestials", {}).keys())
 
     # Parse a datetime string — ISO format with optional time component
