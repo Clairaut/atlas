@@ -47,8 +47,10 @@ class EphemerisClient:
 			handle_log("info", "set ephemeris to %s", ephe_path)
 
 	# Set ephemeris topography; cache for horizontal conversion
+	# Re-applies ephe path after set_topo since some SwissEph versions reset it internally
 	def set_ephe_topo(self, lat: float, lon: float, alt: float) -> None:
 		swe.set_topo(lon, lat, alt)
+		swe.set_ephe_path(self._ephe_path)
 		self._topo = (lat, lon, alt)
 
 		if self._verbose:
