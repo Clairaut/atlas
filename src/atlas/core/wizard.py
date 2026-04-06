@@ -142,6 +142,7 @@ class Wizard:
 		zodiac:      str = "tropical",
 		event_types: list[str] = ["aspect", "ingress", "station", "phase", "elongation", "diurnal"],
 		step:        timedelta = timedelta(hours=1),
+		limit:       Optional[int] = None,
 	) -> list[Event]:
 		
 		# Initialize events list
@@ -174,10 +175,12 @@ class Wizard:
 				if "diurnal"    in event_types: events += self._scan_diurnal(states, prev_states, targets, prev_dt, current)
 
 			prev_states = states
+			if limit and len(events) >= limit:
+				break
 			self._observatory.shift(t_delta=step)
 
-		events.sort(key=lambda e: e.dt)
-		return events
+		events.sort(key=lambda e: e.at)
+		return events[:limit] if limit else events
 
 	# Compute all aspects between a list of celestial states (pure geometry, no ephemeris calls)
 	def conjure_aspects(self, celestials: list[CelestialState]) -> list[Aspect]:
@@ -280,7 +283,7 @@ class Wizard:
 						# Append the event
 						events.append(Event(
 							type=    "aspect",
-							dt=      exact_dt,
+							at=      exact_dt,
 							body=    a.name,
 							body_two=b.name,
 							detail=  name,
@@ -310,7 +313,7 @@ class Wizard:
 				)
 				events.append(Event(
 					type=  "ingress",
-					dt=    exact_dt,
+					at=    exact_dt,
 					body=  state.name,
 					detail=sign_name,
 					glyph= self._config["celestials"].get(targets[k], {}).get("glyph", "?"),
@@ -334,7 +337,7 @@ class Wizard:
 				)
 				events.append(Event(
 					type=  "station",
-					dt=    exact_dt,
+					at=    exact_dt,
 					body=  state.name,
 					detail="retrograde" if state.dlon < 0 else "direct",
 					glyph= self._config["celestials"].get(targets[k], {}).get("glyph", "?"),
@@ -363,7 +366,7 @@ class Wizard:
 						lambda t, k=k, ta=target_angle: self._phase_residual(targets[k], t, ta),
 						prev_dt, current,
 					)
-					events.append(Event(type="phase", dt=exact_dt, body=state.name,
+					events.append(Event(type="phase", at=exact_dt, body=state.name,
 					                    detail=label.format(name=state.name.capitalize()), glyph=phase_glyph))
 		return events
 
@@ -387,7 +390,7 @@ class Wizard:
 						lambda t, k=k, ta=target_angle: self._elong_residual(targets[k], t, ta),
 						prev_dt, current,
 					)
-					events.append(Event(type="elongation", dt=exact_dt, body=state.name,
+					events.append(Event(type="elongation", at=exact_dt, body=state.name,
 					                    detail=label.format(name=state.name.capitalize()), glyph=elong_glyph))
 		return events
 
@@ -408,7 +411,7 @@ class Wizard:
 					lambda t, k=k: self._diurnal_residual(targets[k], t, "rising"),
 					prev_dt, current,
 				)
-				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="rising",           glyph="↑"))
+				events.append(Event(type="diurnal", at=exact_dt, body=state.name, detail="rising",           glyph="↑"))
 
 			# Setting: altitude crosses 0 from above
 			if prev.alt >= 0 > state.alt:
@@ -416,7 +419,7 @@ class Wizard:
 					lambda t, k=k: self._diurnal_residual(targets[k], t, "setting"),
 					prev_dt, current,
 				)
-				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="setting",          glyph="↓"))
+				events.append(Event(type="diurnal", at=exact_dt, body=state.name, detail="setting",          glyph="↓"))
 
 			# Culmination: hour angle crosses 0 from negative (upper transit)
 			if prev.ha <= 0 < state.ha:
@@ -424,7 +427,7 @@ class Wizard:
 					lambda t, k=k: self._diurnal_residual(targets[k], t, "culmination"),
 					prev_dt, current,
 				)
-				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="culmination",      glyph="⊕"))
+				events.append(Event(type="diurnal", at=exact_dt, body=state.name, detail="culmination",      glyph="⊕"))
 
 			# Anti-culmination: hour angle crosses ±180 (lower transit)
 			if abs(prev.ha) > 150 and abs(state.ha) > 150 and prev.ha * state.ha < 0:
@@ -432,7 +435,7 @@ class Wizard:
 					lambda t, k=k: self._diurnal_residual(targets[k], t, "anti-culmination"),
 					prev_dt, current,
 				)
-				events.append(Event(type="diurnal", dt=exact_dt, body=state.name, detail="anti-culmination", glyph="⊗"))
+				events.append(Event(type="diurnal", at=exact_dt, body=state.name, detail="anti-culmination", glyph="⊗"))
 
 		return events
 

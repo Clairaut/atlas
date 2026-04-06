@@ -419,7 +419,7 @@ def _display_events(events: list[Event], concise: bool = False):
     if concise:
         for ev in events:
             bodies = f"{ev.body} / {ev.body_two}" if ev.body_two else ev.body
-            print(f"{ev.glyph} {ev.detail}  {bodies}  {ev.dt.strftime('%Y-%m-%d %H:%M')}")
+            print(f"{ev.glyph} {ev.detail}  {bodies}  {ev.at.strftime('%Y-%m-%d %H:%M')}")
     else:
         table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
         table.add_column(" ",       no_wrap=True, min_width=2)
@@ -432,8 +432,8 @@ def _display_events(events: list[Event], concise: bool = False):
             bodies = f"{ev.body} / {ev.body_two}" if ev.body_two else ev.body
             table.add_row(ev.glyph, ev.detail.title(), ev.type.capitalize(),
                           bodies,
-                          ev.dt.strftime("%Y-%m-%d"),
-                          ev.dt.strftime("%H:%M"))
+                          ev.at.strftime("%Y-%m-%d"),
+                          ev.at.strftime("%H:%M"))
         Console().print(table)
 
 
@@ -688,8 +688,8 @@ def _display_seek_results(events: list[Event], location: "Location", concise: bo
     if concise:
         for ev in events:
             body    = _body_str(ev.body, ev.body_two, glyphs)
-            delta   = ev.dt - now
-            local   = utc_to_local(ev.dt, location)
+            delta   = ev.at - now
+            local   = utc_to_local(ev.at, location)
             event   = f"{ev.glyph} {ev.detail}"
             print(f"{body}  {event}  {local.strftime('%Y-%m-%d %H:%M')}  ({_until_str(delta)})")
     else:
@@ -701,8 +701,8 @@ def _display_seek_results(events: list[Event], location: "Location", concise: bo
         table.add_column("Until", no_wrap=True, justify="right")
         for ev in events:
             body  = _body_str(ev.body, ev.body_two, glyphs)
-            delta = ev.dt - now
-            local = utc_to_local(ev.dt, location)
+            delta = ev.at - now
+            local = utc_to_local(ev.at, location)
             event = f"{ev.glyph} {ev.detail.title()}"
             table.add_row(body, event,
                           local.strftime("%Y-%m-%d"), local.strftime("%H:%M"), _until_str(delta))
@@ -766,27 +766,19 @@ def _handle_seek(args):
             _display_seek_results(events, location=args.location, concise=args.concise)
 
         else:
-            # Rolling next-occurrence search (all types; --limit > 1 with aspect = entry mode)
-            start   = args.datetime
-            horizon = start + timedelta(days=365)
-            window  = timedelta(days=30)
-            results = []
-            current = start
-            while current < horizon and len(results) < args.limit:
-                end    = min(current + window, horizon)
-                events = cli_wizard.conjure_events(
-                    targets     = targets,
-                    start_dt    = current,
-                    end_dt      = end,
-                    location    = args.location,
-                    zodiac      = args.zodiac,
-                    event_types = [args.type],
-                )
-                if args.detail:
-                    events = [e for e in events if args.detail.lower() in e.detail.lower()]
-                results.extend(events)
-                current = end
-            _display_seek_results(results[:args.limit], location=args.location, concise=args.concise)
+            # Next-occurrence search: scan up to 1 year, stop at limit
+            events = cli_wizard.conjure_events(
+                targets     = targets,
+                start_dt    = args.datetime,
+                end_dt      = args.datetime + timedelta(days=365),
+                location    = args.location,
+                zodiac      = args.zodiac,
+                event_types = [args.type],
+                limit       = args.limit,
+            )
+            if args.detail:
+                events = [e for e in events if args.detail.lower() in e.detail.lower()]
+            _display_seek_results(events, location=args.location, concise=args.concise)
 
     except Exception:
         handle_log("error", "failed to handle seek command", source="cli")
