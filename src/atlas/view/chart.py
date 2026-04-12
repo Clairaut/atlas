@@ -204,7 +204,7 @@ class GlyphAtlas:
 class _LabelNode:
     lon: float        # true ecliptic longitude
     chart_lon: float  # display longitude (adjusted for collision avoidance)
-    data: Any         # the BodyState
+    data: Any         # the PlanetState
 
 
 def _resolve_collisions(nodes: list[_LabelNode], tolerance: float = 5.0, max_iters: int = 10000) -> list[_LabelNode]:
@@ -675,7 +675,7 @@ class LiveRadixChart(RadixChart):
         celestials = []
         for target in self.__class__._targets:
             try:
-                state = self.__class__._wizard.conjure_body_state(
+                state = self.__class__._wizard.conjure_planet_state(
                     dt         = now,
                     location   = self.__class__._location,
                     target     = target,
@@ -814,7 +814,7 @@ class PlaybackChart(LiveRadixChart):
         celestials = []
         for target in self.__class__._targets:
             try:
-                state = self.__class__._wizard.conjure_body_state(
+                state = self.__class__._wizard.conjure_planet_state(
                     dt         = dt,
                     location   = self.__class__._location,
                     target     = target,
