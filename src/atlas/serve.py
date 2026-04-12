@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from atlas.core.wizard import Wizard
 from atlas.core.observatory import Observatory
 from atlas.clients.ephe_client import EphemerisClient
-from atlas.models.celestial_state import CelestialState
+from atlas.models.body_state import BodyState
 from atlas.models.location import Location
 from atlas.utils.config import load_config
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from flask import Flask
 
 
-# Serialize a CelestialState to a JSON-safe dict
-def _serialize(state: CelestialState) -> dict:
+# Serialize a BodyState to a JSON-safe dict
+def _serialize(state: BodyState) -> dict:
     sign_glyph, sign_name = state.sign
     phase = state.phase
     return {
@@ -119,7 +119,7 @@ def create_app() -> "Flask":
             if target not in _available_celestials:
                 continue
 
-            state = _wizard.conjure_celestial_state(
+            state = _wizard.conjure_body_state(
                 dt         = now,
                 location   = location,
                 target     = target,

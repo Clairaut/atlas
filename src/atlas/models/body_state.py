@@ -58,7 +58,7 @@ ELONGATION_EVENTS: list[tuple[float, str, str]] = [
 
 
 @dataclass
-class CelestialState:
+class BodyState:
 	id: int
 	glyph: str
 	name: str

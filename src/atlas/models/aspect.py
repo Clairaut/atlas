@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 # Internal Modules
 if TYPE_CHECKING:
-    from atlas.models.celestial_state import CelestialState
+    from atlas.models.body_state import BodyState
 
 
 # Aspect angle definitions: (angle_deg, name, orb_limit)
@@ -29,7 +29,7 @@ ASPECT_GLYPHS: dict[str, str] = {
 @dataclass
 class Aspect:
     name:     str
-    body_one: "CelestialState"
-    body_two: "CelestialState"
+    body_one: "BodyState"
+    body_two: "BodyState"
     orb:      float
     glyph:    str = ""
