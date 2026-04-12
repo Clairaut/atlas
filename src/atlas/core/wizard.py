@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # Internal libraries
 from atlas.utils.logger import handle_log
 from atlas.utils.config import load_config
-from atlas.models.planet_state import PlanetState, PHASE_DEFS, ELONGATION_EVENTS
+from atlas.models.celestial_state import CelestialState, PHASE_DEFS, ELONGATION_EVENTS
 from atlas.models.aspect import Aspect, ASPECT_DEFS, ASPECT_GLYPHS
 from atlas.models.event import Event
 
@@ -27,7 +27,7 @@ class Wizard:
 
 
 	# Sampling: reads dt and location from observatory; caller must configure observatory first
-	def _scry(self, target: str, properties: list[str], frames: list[str]) -> PlanetState:
+	def _scry(self, target: str, properties: list[str], frames: list[str]) -> CelestialState:
 
 		# Get target info from configuartion
 		target_info = self._config["celestials"].get(target.lower())
@@ -35,7 +35,7 @@ class Wizard:
 			raise ValueError(f"Target, {target}, could not be found.")
 		
 		# Create a celestial state
-		c = PlanetState(
+		c = CelestialState(
 			id = target_info["id"], 
 			glyph = target_info["glyph"], 
 			name = target_info["name"],
@@ -49,14 +49,23 @@ class Wizard:
 			for frame in frames:
 				if frame in ("ecliptic", "equatorial", "horizontal"): self._observatory.project(frame)
 				else: self._observatory.orient(frame)
-				pos = self._observatory.observe(c.id)
+
+				# Derived planets (e.g. south node): compute from source + offset
+				if c.orbit == "derived":
+					source_info = self._config["celestials"][target_info["source"]]
+					source_pos  = self._observatory.observe(source_info["id"])
+					offset      = target_info.get("lon_offset", 0)
+					pos         = ((source_pos[0] + offset) % 360, *source_pos[1:])
+				else:
+					pos = self._observatory.observe(c.id)
+
 				c.apply_pos(pos, frame)
 				if self._verbose:
 					handle_log("info", "celestial position: frame=%s, pos=%s", frame, pos, source="wizard")
-		
-		# Apply phenomenon
-		if "phenomenon" in properties:
-			pheno = self._observatory.profile(c.id)
+
+		# Apply phenomenon — skip for stars, nodes, and derived types
+		if "phenomenon" in properties and c.orbit not in ("star", "node", "derived"):
+			pheno = self._observatory.profile(int(c.id))
 			c.apply_pheno(pheno)
 			if self._verbose:
 				handle_log("info", "celestial phenomenon: pheno=%s", pheno, source="wizard")
@@ -64,7 +73,7 @@ class Wizard:
 		return c
 	
 	# Cast states for multiple targets; sets observatory once
-	def conjure_planet_states(
+	def conjure_celestial_states(
 		self,
 		targets:    list[str],
 		dt:         datetime,
@@ -73,12 +82,12 @@ class Wizard:
 		ayanamsa:   Optional[str] = None,
 		properties: list[str] = ["position", "phenomenon"],
 		frames:     list[str] = ["ecliptic", "equatorial"],
-	) -> list[PlanetState]:
+	) -> list[CelestialState]:
 		self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
 		return [self._scry(target=t, properties=properties, frames=frames) for t in targets]
 
-	# Cast a single body state; delegates to conjure_planet_states
-	def conjure_planet_state(
+	# Cast a single body state; delegates to conjure_celestial_states
+	def conjure_celestial_state(
 		self,
 		dt:         datetime,
 		location:   "Location",
@@ -87,11 +96,11 @@ class Wizard:
 		ayanamsa:   Optional[str] = None,
 		properties: list[str] = ["position", "phenomenon"],
 		frames:     list[str] = ["ecliptic", "equatorial"],
-	) -> PlanetState:
-		return self.conjure_planet_states([target], dt=dt, location=location, zodiac=zodiac, ayanamsa=ayanamsa, properties=properties, frames=frames)[0]
+	) -> CelestialState:
+		return self.conjure_celestial_states([target], dt=dt, location=location, zodiac=zodiac, ayanamsa=ayanamsa, properties=properties, frames=frames)[0]
 
 	# Return a time-ordered list of states for a single body over a date range
-	def conjure_planet_trace(
+	def conjure_celestial_trace(
 		self,
 		target: str,
 		start_dt: datetime,
@@ -100,9 +109,9 @@ class Wizard:
 		location: "Location",
 		zodiac: str = "tropical",
 		frames: list[str] = ["ecliptic"],
-	) -> list[PlanetState]:
+	) -> list[CelestialState]:
 		
-		trace: list[PlanetState] = []
+		trace: list[CelestialState] = []
 
 		# Initialize the observatory once; loop reads dt/location from it via _scry
 		self._observatory.set(dt=start_dt, location=location).align(zodiac)
@@ -153,7 +162,7 @@ class Wizard:
 		limit:         Optional[int] = None,
 	) -> list[Event]:
 		
-		def _scry_events(new_events: list[Event]) -> list[Event]:
+		def _filter_events(new_events: list[Event]) -> list[Event]:
 			# Initialize events list
 			matched_events: list[Event] = []
 
@@ -166,7 +175,7 @@ class Wizard:
 
 		# Initialize events list and aspect orb-tracking state
 		events:          list[Event] = []
-		prev_states:     Optional[list[PlanetState]] = None
+		prev_states:     Optional[list[CelestialState]] = None
 		pending_aspects: dict = {}
 
 		pos_frames = ["ecliptic", "equatorial", "horizontal"] if "diurnal" in event_types else ["ecliptic"]
@@ -189,12 +198,12 @@ class Wizard:
 				prev_dt = current - step
 				if "aspect"     in event_types:
 					new_events, pending_aspects = self._scan_aspects(states, prev_states, targets, prev_dt, current, pending_aspects)
-					events += _scry_events(new_events)
-				if "ingress"    in event_types: events += _scry_events(self._scan_ingresses(states, prev_states, targets, prev_dt, current))
-				if "station"    in event_types: events += _scry_events(self._scan_stations(states, prev_states, targets, prev_dt, current))
-				if "phase"      in event_types: events += _scry_events(self._scan_phases(states, prev_states, targets, prev_dt, current))
-				if "elongation" in event_types: events += _scry_events(self._scan_elongation(states, prev_states, targets, prev_dt, current))
-				if "diurnal"    in event_types: events += _scry_events(self._scan_diurnal(states, prev_states, targets, prev_dt, current))
+					events += _filter_events(new_events)
+				if "ingress"    in event_types: events += _filter_events(self._scan_ingresses(states, prev_states, targets, prev_dt, current))
+				if "station"    in event_types: events += _filter_events(self._scan_stations(states, prev_states, targets, prev_dt, current))
+				if "phase"      in event_types: events += _filter_events(self._scan_phases(states, prev_states, targets, prev_dt, current))
+				if "elongation" in event_types: events += _filter_events(self._scan_elongation(states, prev_states, targets, prev_dt, current))
+				if "diurnal"    in event_types: events += _filter_events(self._scan_diurnal(states, prev_states, targets, prev_dt, current))
 
 			prev_states = states
 			if limit and len(events) >= limit:
@@ -225,7 +234,7 @@ class Wizard:
 		return events[:limit] if limit else events
 
 	# Compute all aspects between a list of celestial states (pure geometry, no ephemeris calls)
-	def conjure_aspects(self, celestials: list[PlanetState]) -> list[Aspect]:
+	def conjure_aspects(self, celestials: list[CelestialState]) -> list[Aspect]:
 		aspects: list[Aspect] = []
 
 		# Loop through each celestial
@@ -249,7 +258,7 @@ class Wizard:
 		return aspects
 
 	# Compute cross-chart aspects between natal and transit bodies only
-	def conjure_transit_aspects(self, natal: list[PlanetState], transit: list[PlanetState]) -> list[Aspect]:
+	def conjure_transit_aspects(self, natal: list[CelestialState], transit: list[CelestialState]) -> list[Aspect]:
 
 		# Initialize aspects
 		aspects: list[Aspect] = []
@@ -283,7 +292,7 @@ class Wizard:
 	# Detect pairwise aspect crossings, orb entries, and orb exits between prev and current timestep
 	def _scan_aspects(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 		pending: dict,
 	) -> tuple[list[Event], dict]:
@@ -351,10 +360,10 @@ class Wizard:
 	# Detect sign ingress crossings for each body
 	def _scan_ingresses(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 	) -> list[Event]:
-		from atlas.models.planet_state import SIGNS
+		from atlas.models.celestial_state import SIGNS
 		events: list[Event] = []
 		for k, (state, prev) in enumerate(zip(states, prev_states)):
 			if state.lon is None or prev.lon is None:
@@ -377,7 +386,7 @@ class Wizard:
 	# Detect retrograde / direct station crossings for each body
 	def _scan_stations(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 	) -> list[Event]:
 		events: list[Event] = []
@@ -401,7 +410,7 @@ class Wizard:
 	# Detect phase crossings for all bodies using SwissEph phase data
 	def _scan_phases(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 	) -> list[Event]:
 		events: list[Event] = []
@@ -427,7 +436,7 @@ class Wizard:
 	# Detect synodic crossing events for superior planets (conjunction, quadrature, opposition)
 	def _scan_elongation(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 	) -> list[Event]:
 		events: list[Event] = []
@@ -451,7 +460,7 @@ class Wizard:
 	# Detect daily angular crossings: rising, setting, culmination, anti-culmination
 	def _scan_diurnal(
 		self,
-		states: list[PlanetState], prev_states: list[PlanetState],
+		states: list[CelestialState], prev_states: list[CelestialState],
 		targets: list[str], prev_dt: datetime, current: datetime,
 	) -> list[Event]:
 		events: list[Event] = []

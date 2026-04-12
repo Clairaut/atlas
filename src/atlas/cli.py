@@ -9,7 +9,7 @@ from atlas.core.wizard import Wizard
 from atlas.core.observatory import Observatory
 from atlas.clients.ephe_client import EphemerisClient
 from atlas.models.location import Location
-from atlas.models.planet_state import PlanetState
+from atlas.models.celestial_state import CelestialState
 from atlas.models.aspect import ASPECT_GLYPHS
 from atlas.models.event import Event
 from atlas.utils.logger import handle_log
@@ -278,7 +278,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
 #==================#
 
 # Display a single-moment list of celestial states
-def _display_planet_states(states: list["PlanetState"], concise: bool = False):
+def _display_celestial_states(states: list["CelestialState"], concise: bool = False):
     rows = []
     has_phase = False
 
@@ -348,7 +348,7 @@ def _display_planet_states(states: list["PlanetState"], concise: bool = False):
 
 
 # Display aspects between a list of states at a single moment
-def _display_aspects(states: list["PlanetState"]):
+def _display_aspects(states: list["CelestialState"]):
     global cli_wizard
     if cli_wizard is None:
         cli_wizard = _initialize_cli()
@@ -372,7 +372,7 @@ def _display_aspects(states: list["PlanetState"]):
 
 
 # Display a time-series trace for multiple targets
-def _display_trace(traces: list[list["PlanetState"]], targets: list[str], concise: bool = False):
+def _display_trace(traces: list[list["CelestialState"]], targets: list[str], concise: bool = False):
     # traces[i] = list of states (one per target) at timestep i
     if not traces:
         return
@@ -522,7 +522,7 @@ def _handle_observe(args):
         if has_range:
             # Time-series trace mode — one trace per target, zipped by timestep
             traces_by_target = [
-                cli_wizard.conjure_planet_trace(
+                cli_wizard.conjure_celestial_trace(
                     target   = target,
                     start_dt = args.from_dt,
                     end_dt   = args.to_dt,
@@ -543,9 +543,9 @@ def _handle_observe(args):
             if "phase" in attributes:
                 properties.append("phenomenon")
 
-            states: list[PlanetState] = []
+            states: list[CelestialState] = []
             for target in args.targets:
-                state = cli_wizard.conjure_planet_state(
+                state = cli_wizard.conjure_celestial_state(
                     dt         = args.datetime,
                     location   = args.location,
                     target     = target,
@@ -555,7 +555,7 @@ def _handle_observe(args):
                 )
                 states.append(state)
 
-            _display_planet_states(states, concise=args.concise)
+            _display_celestial_states(states, concise=args.concise)
 
             if "aspects" in attributes:
                 print()
@@ -578,7 +578,7 @@ def _handle_chart(args):
     try:
         celestials = []
         for target in args.targets:
-            state = cli_wizard.conjure_planet_state(
+            state = cli_wizard.conjure_celestial_state(
                 dt         = args.datetime,
                 location   = args.location,
                 target     = target,
@@ -615,11 +615,11 @@ def _handle_transit_chart(args):
         natal_celestials   = []
         transit_celestials = []
         for target in args.targets:
-            natal_celestials.append(cli_wizard.conjure_planet_state(
+            natal_celestials.append(cli_wizard.conjure_celestial_state(
                 dt=natal_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
             ))
-            transit_celestials.append(cli_wizard.conjure_planet_state(
+            transit_celestials.append(cli_wizard.conjure_celestial_state(
                 dt=transit_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
             ))

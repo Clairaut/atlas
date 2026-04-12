@@ -127,8 +127,8 @@ class EphemerisClient:
 			)
 		return cusps, ascmc
 
-	# Query the position of a SwissEph body; converts to horizontal if coord system is set
-	def query_pos(self, target_id: int, jd: float) -> tuple[tuple, int]:
+	# Query the position of a SwissEph planet by integer ID
+	def query_celestial_pos(self, target_id: int, jd: float) -> tuple[tuple, int]:
 		t0 = perf_counter_ns()
 		pos, ret = swe.calc_ut(jd, target_id, self._flags)
 		if self._verbose:
@@ -141,6 +141,21 @@ class EphemerisClient:
 		if self._coord_system == "horizontal":
 			return self._to_horizontal(pos, jd), ret
 		return pos, ret
+
+	# Query the position of a fixed star by name string
+	def query_star_pos(self, name: str, jd: float) -> tuple[tuple, int]:
+		t0 = perf_counter_ns()
+		xx, _, ret = swe.fixstar2(name, jd, self._flags)
+		if self._verbose:
+			te = (perf_counter_ns() - t0) / 1_000_000
+			handle_log(
+				"info",
+				"fixstar2(name=%s, jd=%.6f) -> ret=%i; took %.2f ms",
+				name, jd, ret, te
+			)
+		if self._coord_system == "horizontal":
+			return self._to_horizontal(xx, jd), ret
+		return xx, ret
 
 	# Query the phenomenon of SwissEph body
 	def query_pheno(self, target_id: int, jd: float) -> tuple[tuple, int]:

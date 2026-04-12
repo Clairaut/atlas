@@ -232,20 +232,23 @@ class Observatory:
 		
 		return cusps, ascmc
 
-	# Observe a target
-	def observe(self, target_id: int) -> tuple:
-		pos, ret = self._ephe_client.query_pos(target_id, self._jd)
+	# Observe a target — routes to planet or star query based on ID type
+	def observe(self, target_id: int | str) -> tuple:
+		if isinstance(target_id, int):
+			pos, ret = self._ephe_client.query_celestial_pos(target_id, self._jd)
+		else:
+			pos, ret = self._ephe_client.query_star_pos(target_id, self._jd)
 		if ret < 0:
 			handle_log(
-				"error", 
-				"bad observatory observation; (error-code=%i, target_id=%i, dt=%s, location=%s)", 
+				"error",
+				"bad observatory observation; (error-code=%i, target_id=%s, dt=%s, location=%s)",
 				ret, target_id, self.dt, self._location
 			)
-			raise RuntimeError(f"SwissEph error-code {ret} for target ID: {target_id}")
+			raise RuntimeError(f"SwissEph error-code {ret} for target: {target_id}")
 		if self._verbose:
 			handle_log(
-				"info", 
-				"ok observatory observation; (target ID=%i, dt=%s, location=%s)",
+				"info",
+				"ok observatory observation; (target=%s, dt=%s, location=%s)",
 				target_id, self.dt, self._location
 			)
 		return pos

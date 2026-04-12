@@ -4,7 +4,7 @@
 # Standard libraries
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 # Internal libraries
 if TYPE_CHECKING:
@@ -58,8 +58,8 @@ ELONGATION_EVENTS: list[tuple[float, str, str]] = [
 
 
 @dataclass
-class PlanetState:
-	id: int
+class CelestialState:
+	id: Union[int, str]
 	glyph: str
 	name: str
 	orbit: str                  # "inferior" | "superior" | "satellite" | "star"
@@ -95,12 +95,11 @@ class PlanetState:
 
 	@property
 	def retrograde(self) -> bool:
+		if self.orbit in ("star", "node", "derived"):
+			return False
 		if not self.dlon:
-			raise ValueError(f"dlon is not set for celestial state: {self.name}")
-
-		if self.dlon < 0:
-			return True
-		return False
+			raise ValueError(f"dlon is not set for {self.name}")
+		return self.dlon < 0
 
 	@property
 	def sign(self) -> tuple[str, str]:

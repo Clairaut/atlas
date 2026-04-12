@@ -40,7 +40,10 @@ pholus  = { glyph = "⯛", name = "Pholus",  id = 16, orbit = "superior"  }
 ceres   = { glyph = "⚳", name = "Ceres",   id = 17, orbit = "superior"  }
 pallas  = { glyph = "⚴", name = "Pallas",  id = 18, orbit = "superior"  }
 juno    = { glyph = "⚵", name = "Juno",    id = 19, orbit = "superior"  }
-vesta   = { glyph = "⚶", name = "Vesta",   id = 20, orbit = "superior"  }
+vesta      = { glyph = "⚶", name = "Vesta",      id = 20,           orbit = "superior" }
+true_node  = { glyph = "☊", name = "True Node",  id = 11,           orbit = "node"     }
+south_node = { glyph = "☋", name = "South Node", id = "south_node", orbit = "derived",  source = "true_node", lon_offset = 180 }
+sirius     = { glyph = "✦", name = "Sirius",      id = "Sirius",     orbit = "star"     }
 """
 
 # Load Atlas config, create defaults if missing
