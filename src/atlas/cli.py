@@ -9,8 +9,8 @@ from atlas.core.wizard import Wizard
 from atlas.core.observatory import Observatory
 from atlas.clients.ephe_client import EphemerisClient
 from atlas.models.location import Location
-from atlas.models.celestial_state import CelestialState
-from atlas.models.aspect import Aspect, ASPECT_GLYPHS
+from atlas.models.body_state import BodyState
+from atlas.models.aspect import ASPECT_GLYPHS
 from atlas.models.event import Event
 from atlas.utils.logger import handle_log
 from atlas.utils.config import load_config
@@ -37,6 +37,12 @@ alt: float = config.get("location", {}).get("alt", 0)
 default_image_path: Optional[str] = config.get("output", {}).get("image") or None
 default_video_path: Optional[str] = config.get("output", {}).get("video") or None
 
+# Create default location object
+default_location_str: str = f"({lat}, {lon}, {alt})"
+default_location = Location(lat=lat, lon=lon, alt=alt)
+
+cli_wizard = None
+
 
 # Resolve a save path: if it's a directory (no extension), append a timestamped filename
 def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
@@ -48,12 +54,6 @@ def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
         return os.path.join(base, f"atlas_{stamp}{ext}")
     return base
 
-# Create default location object
-default_location_str: str = f"({lat}, {lon}, {alt})"
-default_location = Location(lat=lat, lon=lon, alt=alt)
-
-
-cli_wizard = None
 
 # Initialize the CLI components
 def _initialize_cli(verbose: bool = False) -> Wizard:
@@ -69,34 +69,9 @@ def _initialize_cli(verbose: bool = False) -> Wizard:
     return wizard
 
 
-# Parse a datetime string — tries full datetime then date-only (midnight)
-def _parse_datetime(s: str) -> datetime:
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
-    raise ValueError(f"unrecognized datetime format: '{s}' — use YYYY-MM-DD or YYYY-MM-DD HH:MM[:SS]")
-
-
-# Parse a step string into a timedelta — units match strftime: M=minutes
-_STEP_UNITS: dict[str, timedelta] = {
-    "w": timedelta(weeks=1),
-    "d": timedelta(days=1),
-    "h": timedelta(hours=1),
-    "M": timedelta(minutes=1),
-}
-
-def _parse_step(s: str) -> timedelta:
-    unit = s[-1]
-    if unit not in _STEP_UNITS or not s[:-1].isdigit():
-        raise ValueError(f"unrecognized step format: '{s}' — use e.g. 1d, 6h, 30M, 1w")
-    return _STEP_UNITS[unit] * int(s[:-1])
-
-
-#==========================#
- # MAIN PARSER CONSTRUCTION #
-#==========================#
+#=========#
+ # PARSER #
+#=========#
 
 # Construct parser
 def _build_parser() -> argparse.ArgumentParser:
@@ -114,16 +89,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help  = "observe celestial bodies at a moment or over a time range",
         usage = "atlas observe {celestial_bodies}* [options]"
     )
-    observe_parser.add_argument("targets",        help="celestial bodies to observe",                              nargs="+")
-    observe_parser.add_argument("--at",           help="observation datetime 'YYYY-MM-DD [HH:MM[:SS]]'",          nargs="?", default=None)
-    observe_parser.add_argument("--from",         help="range start datetime 'YYYY-MM-DD [HH:MM[:SS]]'",          nargs="?", default=None, dest="from_dt")
-    observe_parser.add_argument("--to",           help="range end datetime 'YYYY-MM-DD [HH:MM[:SS]]'",            nargs="?", default=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), dest="to_dt")
-    observe_parser.add_argument("--step",         help="time step for range queries e.g. 1d, 6h, 30m",            nargs="?", default="1d")
-    observe_parser.add_argument("-l", "--location",  help="location '(lat,lon,alt)'",                             nargs="?", default=default_location_str)
-    observe_parser.add_argument("-z", "--zodiac",    help="zodiac type",                                           choices=["tropical", "sidereal"], default="tropical")
-    observe_parser.add_argument("-a", "--attributes",help="extra attributes: phase, aspects, transits, elongation", choices=["phase", "aspects", "transits", "elongation"], nargs="*", default=None)
-    observe_parser.add_argument("-f", "--frames",    help="coordinate frames",                                     nargs="*", default=["ecliptic"])
-    observe_parser.add_argument("-c", "--concise",   help="compact output",                                        action="store_true")
+    observe_parser.add_argument("targets",           help="celestial bodies to observe",                                nargs="+")
+    observe_parser.add_argument("--at",              help="observation datetime 'YYYY-MM-DD [HH:MM[:SS]]'",             nargs="?", default=None)
+    observe_parser.add_argument("--from",            help="range start datetime 'YYYY-MM-DD [HH:MM[:SS]]'",             nargs="?", default=None, dest="from_dt")
+    observe_parser.add_argument("--to",              help="range end datetime 'YYYY-MM-DD [HH:MM[:SS]]'",               nargs="?", default=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), dest="to_dt")
+    observe_parser.add_argument("--step",            help="time step for range queries e.g. 1d, 6h, 30m",               nargs="?", default="1d")
+    observe_parser.add_argument("-l", "--location",  help="location '(lat,lon,alt)'",                                   nargs="?", default=default_location_str)
+    observe_parser.add_argument("-z", "--zodiac",    help="zodiac type",                                                 choices=["tropical", "sidereal"], default="tropical")
+    observe_parser.add_argument("-a", "--attributes",help="extra attributes: phase, aspects, transits, elongation",      choices=["phase", "aspects", "transits", "elongation"], nargs="*", default=None)
+    observe_parser.add_argument("-f", "--frames",    help="coordinate frames",                                           nargs="*", default=["ecliptic"])
+    observe_parser.add_argument("-c", "--concise",   help="compact output",                                              action="store_true")
 
     # chart subparser
     chart_parser = subparsers.add_parser(
@@ -150,17 +125,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help            = "find celestial events by type",
         description     = (
             "Finds celestial events by type.\n\n"
-            "  aspect (no --from/--to)  — snapshot of aspects active at --at or now\n"
-            "  other  (no --from/--to)  — next N occurrences from --at or now (see --limit)\n"
-            "  any    (with --from/--to) — all matching event entrances in that range\n\n"
-            "  --limit N with aspect and no range triggers entry mode (next N aspect formations)."
+            "  no --from/--to  — next N occurrences from --at or now (see --limit)\n"
+            "  with --from/--to — all matching event entrances in that range\n\n"
+            "  For currently active aspects use: atlas observe -a aspects"
         ),
         usage           = "atlas seek {type} [targets]* [options]",
         epilog          = (
             "examples:\n"
-            "  atlas seek aspect                              active aspects right now\n"
-            "  atlas seek aspect sun moon --at 1999-09-29    active aspects on a date\n"
-            "  atlas seek aspect --detail trine              active trines right now\n"
+            "  atlas seek aspect                              next aspect entrance\n"
+            "  atlas seek aspect --detail trine              next trine entrance\n"
             "  atlas seek aspect --limit 3                   next 3 aspect entrances\n"
             "  atlas seek phase moon --detail full           next full moon\n"
             "  atlas seek phase moon --detail full --limit 6 next 6 full moons\n"
@@ -173,9 +146,9 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class = argparse.RawDescriptionHelpFormatter,
     )
-    seek_parser.add_argument("type",      help="event type: phase, ingress, station, aspect, elongation, diurnal", choices=["phase", "ingress", "station", "aspect", "elongation", "diurnal"])
+    seek_parser.add_argument("type",      help="event type: phase, ingress, station, aspect, elongation, diurnal", nargs="?", choices=["phase", "ingress", "station", "aspect", "elongation", "diurnal"], default=None)
     seek_parser.add_argument("targets",   help="celestial bodies to scan",                                   nargs="*", default=[])
-    seek_parser.add_argument("--detail",  help="filter by detail e.g. full, scorpio, trine, retrograde",    nargs="?", default=None)
+    seek_parser.add_argument("--detail",  help="filter by detail e.g. full, scorpio, trine, retrograde",    nargs="*", default=[])
     seek_parser.add_argument("--at",      help="moment or search start 'YYYY-MM-DD [HH:MM[:SS]]'",          nargs="?", default=None)
     seek_parser.add_argument("--from",    help="range start — with --to, returns event entrances in range",  nargs="?", default=None, dest="from_dt")
     seek_parser.add_argument("--to",      help="range end   — with --from, returns event entrances in range",nargs="?", default=None, dest="to_dt")
@@ -199,17 +172,38 @@ def _build_parser() -> argparse.ArgumentParser:
         help  = "open the Atlas sky viewer (requires atlas-viewer)",
         usage = "atlas view [options]"
     )
-    view_parser.add_argument("--at",           help="datetime to view 'YYYY-MM-DD [HH:MM[:SS]]'", nargs="?", default=None)
-    view_parser.add_argument("--live",         help="real-time mode (default when --at is omitted)", action="store_true")
-    view_parser.add_argument("-l", "--location", help="location '(lat,lon,alt)'",                  nargs="?", default=default_location_str)
-    view_parser.add_argument("-z", "--zodiac",   help="zodiac type",                                choices=["tropical", "sidereal"], default="tropical")
+    view_parser.add_argument("--at",             help="datetime to view 'YYYY-MM-DD [HH:MM[:SS]]'", nargs="?", default=None)
+    view_parser.add_argument("--live",           help="real-time mode (default when --at is omitted)", action="store_true")
+    view_parser.add_argument("-l", "--location", help="location '(lat,lon,alt)'",                    nargs="?", default=default_location_str)
+    view_parser.add_argument("-z", "--zodiac",   help="zodiac type",                                  choices=["tropical", "sidereal"], default="tropical")
 
     return parser
 
 
-#====================#
- # ARGUMENT PARSERS #
-#====================#
+# Parse a datetime string — tries full datetime then date-only (midnight)
+def _parse_datetime(s: str) -> datetime:
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"unrecognized datetime format: '{s}' — use YYYY-MM-DD or YYYY-MM-DD HH:MM[:SS]")
+
+
+# Parse a step string into a timedelta — units match strftime: M=minutes
+_STEP_UNITS: dict[str, timedelta] = {
+    "w": timedelta(weeks=1),
+    "d": timedelta(days=1),
+    "h": timedelta(hours=1),
+    "M": timedelta(minutes=1),
+}
+
+def _parse_step(s: str) -> timedelta:
+    unit = s[-1]
+    if unit not in _STEP_UNITS or not s[:-1].isdigit():
+        raise ValueError(f"unrecognized step format: '{s}' — use e.g. 1d, 6h, 30M, 1w")
+    return _STEP_UNITS[unit] * int(s[:-1])
+
 
 # Parse all arguments
 def _parse_arguments(parser: argparse.ArgumentParser):
@@ -284,7 +278,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
 #==================#
 
 # Display a single-moment list of celestial states
-def _display_celestial_states(states: list["CelestialState"], concise: bool = False):
+def _display_body_states(states: list["BodyState"], concise: bool = False):
     rows = []
     has_phase = False
 
@@ -354,7 +348,7 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
 
 
 # Display aspects between a list of states at a single moment
-def _display_aspects(states: list["CelestialState"]):
+def _display_aspects(states: list["BodyState"]):
     global cli_wizard
     if cli_wizard is None:
         cli_wizard = _initialize_cli()
@@ -378,7 +372,7 @@ def _display_aspects(states: list["CelestialState"]):
 
 
 # Display a time-series trace for multiple targets
-def _display_trace(traces: list[list["CelestialState"]], targets: list[str], concise: bool = False):
+def _display_trace(traces: list[list["BodyState"]], targets: list[str], concise: bool = False):
     # traces[i] = list of states (one per target) at timestep i
     if not traces:
         return
@@ -437,8 +431,65 @@ def _display_events(events: list[Event], concise: bool = False):
         Console().print(table)
 
 
+# Format a body string with glyphs: "☽ Moon / ♀ Venus"
+def _body_str(body: str, body_two: Optional[str], glyphs: dict) -> str:
+    g1   = glyphs.get(body.lower(), "")
+    part = f"{g1} {body}".strip()
+    if body_two:
+        g2   = glyphs.get(body_two.lower(), "")
+        part += f" / {g2} {body_two}".rstrip()
+    return part
+
+
+# Format a timedelta as a relative time string; shows hours when within a day
+def _until_str(delta: timedelta) -> str:
+    s = delta.total_seconds()
+    if s >= 0:
+        if s < 3600:    return f"in {int(s // 60)}m"
+        if s < 86400:   return f"in {int(s // 3600)}h"
+        days = delta.days
+        return f"in {days} day" if days == 1 else f"in {days} days"
+    s = abs(s)
+    if s < 3600:    return f"{int(s // 60)}m ago"
+    if s < 86400:   return f"{int(s // 3600)}h ago"
+    days = abs(delta.days)
+    return f"{days} day ago" if days == 1 else f"{days} days ago"
+
+
+# Display seek results: {glyph} {body glyphs+names} {detail} {date} {time} {until}
+def _display_seek_results(events: list[Event], location: "Location", concise: bool = False):
+    if not events:
+        print("No events found.")
+        return
+    now    = datetime.now(timezone.utc).replace(tzinfo=None)
+    glyphs = {k: v.get("glyph", "") for k, v in config.get("celestials", {}).items()}
+
+    if concise:
+        for ev in events:
+            body    = _body_str(ev.body, ev.body_two, glyphs)
+            delta   = ev.at - now
+            local   = utc_to_local(ev.at, location)
+            event   = f"{ev.glyph} {ev.detail}"
+            print(f"{body}  {event}  {local.strftime('%Y-%m-%d %H:%M')}  ({_until_str(delta)})")
+    else:
+        table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
+        table.add_column("Body",  no_wrap=True)
+        table.add_column("Event", no_wrap=True)
+        table.add_column("Date",  no_wrap=True)
+        table.add_column("Time",  no_wrap=True)
+        table.add_column("Until", no_wrap=True, justify="right")
+        for ev in events:
+            body  = _body_str(ev.body, ev.body_two, glyphs)
+            delta = ev.at - now
+            local = utc_to_local(ev.at, location)
+            event = f"{ev.glyph} {ev.detail.title()}"
+            table.add_row(body, event,
+                          local.strftime("%Y-%m-%d"), local.strftime("%H:%M"), _until_str(delta))
+        Console().print(table)
+
+
 #===================#
- # HANDLE COMMANDS #
+ # COMMAND HANDLERS #
 #===================#
 
 def _handle_command(args):
@@ -468,22 +519,10 @@ def _handle_observe(args):
     attributes  = args.attributes or []
 
     try:
-        if has_range and "transits" in attributes:
-            # Transit / event detection mode
-            events = cli_wizard.conjure_events(
-                targets     = args.targets,
-                start_dt    = args.from_dt,
-                end_dt      = args.to_dt,
-                location    = args.location,
-                zodiac      = args.zodiac,
-                step        = args.step,
-            )
-            _display_events(events, concise=args.concise)
-
-        elif has_range:
+        if has_range:
             # Time-series trace mode — one trace per target, zipped by timestep
             traces_by_target = [
-                cli_wizard.conjure_celestial_trace(
+                cli_wizard.conjure_body_trace(
                     target   = target,
                     start_dt = args.from_dt,
                     end_dt   = args.to_dt,
@@ -504,9 +543,9 @@ def _handle_observe(args):
             if "phase" in attributes:
                 properties.append("phenomenon")
 
-            states: list[CelestialState] = []
+            states: list[BodyState] = []
             for target in args.targets:
-                state = cli_wizard.conjure_celestial_state(
+                state = cli_wizard.conjure_body_state(
                     dt         = args.datetime,
                     location   = args.location,
                     target     = target,
@@ -516,7 +555,7 @@ def _handle_observe(args):
                 )
                 states.append(state)
 
-            _display_celestial_states(states, concise=args.concise)
+            _display_body_states(states, concise=args.concise)
 
             if "aspects" in attributes:
                 print()
@@ -539,7 +578,7 @@ def _handle_chart(args):
     try:
         celestials = []
         for target in args.targets:
-            state = cli_wizard.conjure_celestial_state(
+            state = cli_wizard.conjure_body_state(
                 dt         = args.datetime,
                 location   = args.location,
                 target     = target,
@@ -576,11 +615,11 @@ def _handle_transit_chart(args):
         natal_celestials   = []
         transit_celestials = []
         for target in args.targets:
-            natal_celestials.append(cli_wizard.conjure_celestial_state(
+            natal_celestials.append(cli_wizard.conjure_body_state(
                 dt=natal_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
             ))
-            transit_celestials.append(cli_wizard.conjure_celestial_state(
+            transit_celestials.append(cli_wizard.conjure_body_state(
                 dt=transit_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
             ))
@@ -652,85 +691,6 @@ def _handle_live(args):
         traceback.print_exc()
 
 
-# Format a body string with glyphs: "☽ Moon / ♀ Venus"
-def _body_str(body: str, body_two: Optional[str], glyphs: dict) -> str:
-    g1   = glyphs.get(body.lower(), "")
-    part = f"{g1} {body}".strip()
-    if body_two:
-        g2   = glyphs.get(body_two.lower(), "")
-        part += f" / {g2} {body_two}".rstrip()
-    return part
-
-
-# Format a timedelta as a relative time string; shows hours when within a day
-def _until_str(delta: timedelta) -> str:
-    s = delta.total_seconds()
-    if s >= 0:
-        if s < 3600:    return f"in {int(s // 60)}m"
-        if s < 86400:   return f"in {int(s // 3600)}h"
-        days = delta.days
-        return f"in {days} day" if days == 1 else f"in {days} days"
-    s = abs(s)
-    if s < 3600:    return f"{int(s // 60)}m ago"
-    if s < 86400:   return f"{int(s // 3600)}h ago"
-    days = abs(delta.days)
-    return f"{days} day ago" if days == 1 else f"{days} days ago"
-
-
-# Display seek results: {glyph} {body glyphs+names} {detail} {date} {time} {until}
-def _display_seek_results(events: list[Event], location: "Location", concise: bool = False):
-    if not events:
-        print("No events found.")
-        return
-    now    = datetime.now(timezone.utc).replace(tzinfo=None)
-    glyphs = {k: v.get("glyph", "") for k, v in config.get("celestials", {}).items()}
-
-    if concise:
-        for ev in events:
-            body    = _body_str(ev.body, ev.body_two, glyphs)
-            delta   = ev.at - now
-            local   = utc_to_local(ev.at, location)
-            event   = f"{ev.glyph} {ev.detail}"
-            print(f"{body}  {event}  {local.strftime('%Y-%m-%d %H:%M')}  ({_until_str(delta)})")
-    else:
-        table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
-        table.add_column("Body",  no_wrap=True)
-        table.add_column("Event", no_wrap=True)
-        table.add_column("Date",  no_wrap=True)
-        table.add_column("Time",  no_wrap=True)
-        table.add_column("Until", no_wrap=True, justify="right")
-        for ev in events:
-            body  = _body_str(ev.body, ev.body_two, glyphs)
-            delta = ev.at - now
-            local = utc_to_local(ev.at, location)
-            event = f"{ev.glyph} {ev.detail.title()}"
-            table.add_row(body, event,
-                          local.strftime("%Y-%m-%d"), local.strftime("%H:%M"), _until_str(delta))
-        Console().print(table)
-
-
-# Display a snapshot of currently active aspects: body | aspect | orb
-def _display_aspect_snapshot(aspects: list[Aspect], concise: bool = False):
-    if not aspects:
-        print("No active aspects.")
-        return
-    glyphs = {k: v.get("glyph", "") for k, v in config.get("celestials", {}).items()}
-
-    if concise:
-        for asp in aspects:
-            body = _body_str(asp.body_one.name, asp.body_two.name, glyphs)
-            print(f"{body}  {asp.glyph} {asp.name}  {asp.orb:.2f}°")
-    else:
-        table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
-        table.add_column("Body",   no_wrap=True)
-        table.add_column("Aspect", no_wrap=True)
-        table.add_column("Orb",    no_wrap=True, justify="right")
-        for asp in aspects:
-            body = _body_str(asp.body_one.name, asp.body_two.name, glyphs)
-            table.add_row(body, f"{asp.glyph} {asp.name.capitalize()}", f"{asp.orb:.2f}°")
-        Console().print(table)
-
-
 def _handle_seek(args):
     global cli_wizard
     if cli_wizard is None:
@@ -739,46 +699,35 @@ def _handle_seek(args):
     targets   = args.targets or list(config.get("celestials", {}).keys())
     has_range = getattr(args, "from_dt", None) and getattr(args, "to_dt", None)
 
+    # Assume all events if none given
+    event_types = [args.type] if args.type else ["aspect", "ingress", "station", "phase", "elongation", "diurnal"]
+
     try:
-        # Aspect snapshot: active aspects at a moment (no time scanning needed)
-        if args.type == "aspect" and not has_range and args.limit == 1:
-            states  = [cli_wizard.conjure_celestial_state(
-                           dt=args.datetime, location=args.location, target=t,
-                           zodiac=args.zodiac, properties=["position"], frames=["ecliptic"])
-                       for t in targets]
-            aspects = cli_wizard.conjure_aspects(states)
-            if args.detail:
-                aspects = [a for a in aspects if args.detail.lower() in a.name.lower()]
-            _display_aspect_snapshot(aspects, concise=args.concise)
+        event_details = args.detail or None
 
-        elif has_range:
-            # Entry-based search over an explicit range (all event types)
+        if has_range:
             events = cli_wizard.conjure_events(
-                targets     = targets,
-                start_dt    = args.from_dt,
-                end_dt      = args.to_dt,
-                location    = args.location,
-                zodiac      = args.zodiac,
-                event_types = [args.type],
+                targets         = targets,
+                start_dt        = args.from_dt,
+                end_dt          = args.to_dt,
+                location        = args.location,
+                zodiac          = args.zodiac,
+                event_types     = event_types,
+                event_details   = event_details,
             )
-            if args.detail:
-                events = [e for e in events if args.detail.lower() in e.detail.lower()]
-            _display_seek_results(events, location=args.location, concise=args.concise)
-
         else:
-            # Next-occurrence search: scan up to 1 year, stop at limit
             events = cli_wizard.conjure_events(
-                targets     = targets,
-                start_dt    = args.datetime,
-                end_dt      = args.datetime + timedelta(days=365),
-                location    = args.location,
-                zodiac      = args.zodiac,
-                event_types = [args.type],
-                limit       = args.limit,
+                targets         = targets,
+                start_dt        = args.datetime,
+                end_dt          = args.datetime + timedelta(days=365),
+                location        = args.location,
+                event_details   = event_details,
+                zodiac          = args.zodiac,
+                event_types     = event_types,
+                limit           = args.limit,
             )
-            if args.detail:
-                events = [e for e in events if args.detail.lower() in e.detail.lower()]
-            _display_seek_results(events, location=args.location, concise=args.concise)
+
+        _display_seek_results(events, location=args.location, concise=args.concise)
 
     except Exception:
         handle_log("error", "failed to handle seek command", source="cli")
