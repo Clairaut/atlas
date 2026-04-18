@@ -125,7 +125,7 @@ def create_app() -> "Flask":
                 target     = target,
                 zodiac     = zodiac,
                 properties = ["position", "phenomenon"],
-                frames     = ["ecliptic"],
+                systems    = ["ecliptic"],
             )
 
             bodies[target] = _serialize(state)

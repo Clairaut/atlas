@@ -681,7 +681,7 @@ class LiveRadixChart(RadixChart):
                     target     = target,
                     zodiac     = self.__class__._zodiac,
                     properties = ["position"],
-                    frames     = ["ecliptic"],
+                    systems    = ["ecliptic"],
                 )
                 celestials.append(state)
             except Exception:
@@ -820,7 +820,7 @@ class PlaybackChart(LiveRadixChart):
                     target     = target,
                     zodiac     = self.__class__._zodiac,
                     properties = ["position"],
-                    frames     = ["ecliptic"],
+                    systems    = ["ecliptic"],
                 )
                 celestials.append(state)
             except Exception:
