@@ -27,17 +27,20 @@ class Wizard:
 
 
 	# Sampling: reads dt and location from observatory; caller must configure observatory first
-	def _scry(self, target: str, properties: list[str], frames: list[str]) -> CelestialState:
+	def _scry(self, target: str, properties: list[str], systems: list[str]) -> CelestialState:
 
-		# Get target info from configuartion
-		target_info = self._config["celestials"].get(target.lower())
-		if not target_info:
-			raise ValueError(f"Target, {target}, could not be found.")
-		
+		# Get target info from config; fall back to raw star lookup if not found
+		target_info = self._config["celestials"].get(target.lower()) or {
+			"id":    target,
+			"glyph": "✦",
+			"name":  target.capitalize(),
+			"orbit": "star",
+		}
+
 		# Create a celestial state
 		c = CelestialState(
-			id = target_info["id"], 
-			glyph = target_info["glyph"], 
+			id = target_info["id"],
+			glyph = target_info["glyph"],
 			name = target_info["name"],
 			orbit = target_info.get("orbit", "superior"),
 			dt = self._observatory.dt,
@@ -46,9 +49,9 @@ class Wizard:
 
 		# Apply position
 		if "position" in properties:
-			for frame in frames:
-				if frame in ("ecliptic", "equatorial", "horizontal"): self._observatory.project(frame)
-				else: self._observatory.orient(frame)
+			for system in systems:
+				if system in ("ecliptic", "equatorial", "horizontal"): self._observatory.project(system)
+				else: self._observatory.orient(system)
 
 				# Derived planets (e.g. south node): compute from source + offset
 				if c.orbit == "derived":
@@ -59,9 +62,9 @@ class Wizard:
 				else:
 					pos = self._observatory.observe(c.id)
 
-				c.apply_pos(pos, frame)
+				c.apply_pos(pos, system)
 				if self._verbose:
-					handle_log("info", "celestial position: frame=%s, pos=%s", frame, pos, source="wizard")
+					handle_log("info", "celestial position: system=%s, pos=%s", system, pos, source="wizard")
 
 		# Apply phenomenon — skip for stars, nodes, and derived types
 		if "phenomenon" in properties and c.orbit not in ("star", "node", "derived"):
@@ -69,6 +72,10 @@ class Wizard:
 			c.apply_pheno(pheno)
 			if self._verbose:
 				handle_log("info", "celestial phenomenon: pheno=%s", pheno, source="wizard")
+
+		# Load catalog magnitude for stars when requested
+		if "magnitude" in properties and c.orbit == "star":
+			c.app_mag = self._observatory.measure(str(c.id), "star_magnitude")
 
 		return c
 	
@@ -81,10 +88,10 @@ class Wizard:
 		zodiac:     str = "tropical",
 		ayanamsa:   Optional[str] = None,
 		properties: list[str] = ["position", "phenomenon"],
-		frames:     list[str] = ["ecliptic", "equatorial"],
+		systems:    list[str] = ["ecliptic"],
 	) -> list[CelestialState]:
 		self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
-		return [self._scry(target=t, properties=properties, frames=frames) for t in targets]
+		return [self._scry(target=t, properties=properties, systems=systems) for t in targets]
 
 	# Cast a single body state; delegates to conjure_celestial_states
 	def conjure_celestial_state(
@@ -95,22 +102,22 @@ class Wizard:
 		zodiac:     str = "tropical",
 		ayanamsa:   Optional[str] = None,
 		properties: list[str] = ["position", "phenomenon"],
-		frames:     list[str] = ["ecliptic", "equatorial"],
+		systems:    list[str] = ["ecliptic"],
 	) -> CelestialState:
-		return self.conjure_celestial_states([target], dt=dt, location=location, zodiac=zodiac, ayanamsa=ayanamsa, properties=properties, frames=frames)[0]
+		return self.conjure_celestial_states([target], dt=dt, location=location, zodiac=zodiac, ayanamsa=ayanamsa, properties=properties, systems=systems)[0]
 
 	# Return a time-ordered list of states for a single body over a date range
 	def conjure_celestial_trace(
 		self,
-		target: str,
+		target:   str,
 		start_dt: datetime,
-		end_dt: datetime,
-		step: timedelta,
+		end_dt:   datetime,
+		step:     timedelta,
 		location: "Location",
-		zodiac: str = "tropical",
-		frames: list[str] = ["ecliptic"],
+		zodiac:   str = "tropical",
+		systems:  list[str] = ["ecliptic"],
 	) -> list[CelestialState]:
-		
+
 		trace: list[CelestialState] = []
 
 		# Initialize the observatory once; loop reads dt/location from it via _scry
@@ -118,7 +125,7 @@ class Wizard:
 
 		# While the observatory datetime is less than the end time given, append celestial position and increment time
 		while self._observatory.dt <= end_dt:
-			trace.append(self._scry(target, ["position"], frames))
+			trace.append(self._scry(target, ["position"], systems))
 			self._observatory.shift(t_delta=step)
 
 		return trace
@@ -178,20 +185,15 @@ class Wizard:
 		prev_states:     Optional[list[CelestialState]] = None
 		pending_aspects: dict = {}
 
-		pos_frames = ["ecliptic", "equatorial", "horizontal"] if "diurnal" in event_types else ["ecliptic"]
+		pos_systems = ["ecliptic", "equatorial", "horizontal"] if "diurnal" in event_types else ["ecliptic"]
 		properties = ["position", "phenomenon"]
-
-		# Validate all targets upfront
-		for t in targets:
-			if not self._config["celestials"].get(t.lower()):
-				raise ValueError(f"Target, {t}, could not be found.")
 
 		# Initialize the observatory once
 		self._observatory.set(dt=start_dt, location=location).align(zodiac=zodiac)
 
 		# While the observatory datetime is less than the end datetime
 		while self._observatory.dt <= end_dt:
-			states = [self._scry(t, properties, pos_frames) for t in targets]
+			states = [self._scry(t, properties, pos_systems) for t in targets]
 
 			if prev_states is not None:
 				current = self._observatory.dt
