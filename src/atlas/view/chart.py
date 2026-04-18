@@ -273,7 +273,8 @@ class Chart(moderngl_window.WindowConfig): # type: ignore
         # Orthographic projection
         v    = self.VIEWPORT
         proj = _ortho(-v, v, -v, v)
-        self._line_prog['proj'].write(proj.tobytes()) # type: ignore
+        self._line_prog['proj'].write(proj.tobytes())  # type: ignore
+        self._line_prog['u_line_alpha'] = 1.0          # type: ignore
         self._glyph_prog['proj'].write(proj.tobytes()) # type: ignore
 
         # Glyph atlases
