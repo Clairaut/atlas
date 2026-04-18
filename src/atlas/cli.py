@@ -106,7 +106,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help  = "render a radix, transit, or playback chart",
         usage = "atlas chart [targets]* [options]"
     )
-    default_targets = list(config.get("celestials", {}).keys())
+    default_targets = [k for k, v in config.get("celestials", {}).items() if v.get("orbit") != "star"]
     chart_parser.add_argument("targets",          help="celestial bodies to include",                              nargs="*", default=default_targets)
     chart_parser.add_argument("--at",             help="chart datetime 'YYYY-MM-DD [HH:MM[:SS]]'",                nargs="?", default=None)
     chart_parser.add_argument("--transit",        help="transit datetime — triggers dual-ring transit chart",      nargs="?", default=None)
