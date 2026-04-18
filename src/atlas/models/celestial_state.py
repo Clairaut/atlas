@@ -97,23 +97,21 @@ class CelestialState:
 	def retrograde(self) -> bool:
 		if self.orbit in ("star", "node", "derived"):
 			return False
-		if not self.dlon:
-			raise ValueError(f"dlon is not set for {self.name}")
+		if self.dlon is None:
+			return False
 		return self.dlon < 0
 
 	@property
 	def sign(self) -> tuple[str, str]:
-		if not self.lon:
+		if self.lon is None:
 			raise ValueError(f"lon is not set for celestial state: {self.name}")
-
 		idx = int(self.lon // 30) % 12
 		return SIGNS[idx]
-	
+
 	@property
 	def orb(self) -> float:
-		if not self.lon:
+		if self.lon is None:
 			raise ValueError(f"lon is not set for celestial state: {self.name}")
-
 		return self.lon % 30
 	
 	@property
@@ -152,6 +150,14 @@ class CelestialState:
 			return None
 		return self.elong if self.waxing_elong else 360.0 - self.elong
 
+
+	@property
+	def constellation(self) -> Optional[str]:
+		# Requires equatorial frame to be loaded
+		if self.ra is None or self.dec is None:
+			return None
+		from atlas.utils.constellation import identify_constellation
+		return identify_constellation(self.ra, self.dec)
 
 	# Apply celestial position to state
 	def apply_pos(self, pos: tuple[float, ...], frame: str) -> None:

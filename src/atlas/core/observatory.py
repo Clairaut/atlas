@@ -253,6 +253,14 @@ class Observatory:
 			)
 		return pos
 
+	# Retrieve a static catalog attribute for a target
+	def measure(self, target_id: str, attribute: str) -> Optional[float]:
+		match attribute:
+			case "star_magnitude":
+				return self._ephe_client.query_star_mag(target_id)
+			case _:
+				raise ValueError(f"unknown measurable attribute: '{attribute}'")
+
 	# Profile a target
 	def profile(self, target_id: int) -> tuple:
 		pheno_now = self._ephe_client.query_pheno(target_id, self._jd)
