@@ -96,8 +96,8 @@ def _build_parser() -> argparse.ArgumentParser:
     observe_parser.add_argument("--step",            help="time step for range queries e.g. 1d, 6h, 30m",               nargs="?", default="1d")
     observe_parser.add_argument("-l", "--location",  help="location '(lat,lon,alt)'",                                   nargs="?", default=default_location_str)
     observe_parser.add_argument("-z", "--zodiac",    help="zodiac type",                                                 choices=["tropical", "sidereal"], default="tropical")
-    observe_parser.add_argument("-a", "--attributes",help="extra attributes: phase, aspects, transits, elongation",      choices=["phase", "aspects", "transits", "elongation"], nargs="*", default=None)
-    observe_parser.add_argument("-f", "--frames",    help="coordinate frames",                                           nargs="*", default=["ecliptic"])
+    observe_parser.add_argument("-a", "--attributes",help="extra attributes: phase, aspects, transits, elongation, mag",  choices=["phase", "aspects", "transits", "elongation", "mag"], nargs="*", default=None)
+    observe_parser.add_argument("-s", "--system",    help="coordinate systems: ecliptic, equatorial, horizontal",        nargs="*", default=["ecliptic"])
     observe_parser.add_argument("-c", "--concise",   help="compact output",                                              action="store_true")
 
     # chart subparser
@@ -156,6 +156,21 @@ def _build_parser() -> argparse.ArgumentParser:
     seek_parser.add_argument("-l", "--location", help="location '(lat,lon,alt)'",                           nargs="?", default=default_location_str)
     seek_parser.add_argument("-z", "--zodiac",   help="zodiac type",                                         choices=["tropical", "sidereal"], default="tropical")
     seek_parser.add_argument("-c", "--concise",  help="compact output",                                      action="store_true")
+
+    # dome subparser
+    dome_parser = subparsers.add_parser(
+        name  = "dome",
+        help  = "render an interactive full-sky dome (azimuthal equidistant projection)",
+        usage = "atlas dome [targets]* [options]"
+    )
+    dome_parser.add_argument("targets",           help="planet targets to overlay (default: all configured)", nargs="*", default=None)
+    dome_parser.add_argument("--at",              help="observation datetime 'YYYY-MM-DD [HH:MM[:SS]]'",     nargs="?", default=None)
+    dome_parser.add_argument("--mag",             help="magnitude cutoff for star display (default 6.5)",    type=float, default=6.5)
+    dome_parser.add_argument("--brightness",      help="star brightness multiplier 0.0–2.0 (default 1.0)",  type=float, default=1.0)
+    dome_parser.add_argument("--save",            help="save initial frame as PNG",                          nargs="?", const="", default=None)
+    dome_parser.add_argument("-l", "--location",  help="location '(lat,lon,alt)'",                          nargs="?", default=default_location_str)
+    dome_parser.add_argument("-z", "--zodiac",    help="zodiac type",                                        choices=["tropical", "sidereal"], default="tropical")
+    dome_parser.add_argument("-T", "--title",     help="window title",                                       nargs="?", default=None)
 
     # serve subparser
     serve_parser = subparsers.add_parser(
@@ -277,73 +292,120 @@ def _parse_arguments(parser: argparse.ArgumentParser):
  # DISPLAY HELPERS #
 #==================#
 
+# Format RA degrees as hh:mm string
+def _fmt_ra(ra_deg: float) -> str:
+    h = ra_deg / 15.0
+    hh = int(h)
+    mm = int((h - hh) * 60)
+    return f"{hh:02d}h {mm:02d}m"
+
+
 # Display a single-moment list of celestial states
-def _display_celestial_states(states: list["CelestialState"], concise: bool = False):
+def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None):
+    attrs          = attributes or []
+    # Detect which coordinate systems are populated
+    has_ecliptic   = any(s.lon is not None for s in states)
+    has_equatorial = any(s.ra  is not None for s in states)
+    has_horizontal = any(s.alt is not None for s in states)
+    # Mag: always show for stars; show for planets only if -a mag requested
+    has_mag        = any(s.app_mag is not None and (s.orbit == "star" or "mag" in attrs) for s in states)
+    has_phase      = False
+
     rows = []
-    has_phase = False
-
     for state in states:
-        full_name = f"{getattr(state, 'glyph', '?')} {getattr(state, 'name', '?')}"
+        glyph_str = getattr(state, "glyph", "?")
+        name_str  = getattr(state, "name",  "?")
+        retrograde = "℞" if getattr(state, "retrograde", False) else ""
 
-        try:
-            sign_glyph, sign_name = state.sign
-            sign = f"{sign_glyph} {sign_name}"
-        except Exception:
-            sign_glyph, sign = "?", "?"
+        # Ecliptic
+        try:   sign_glyph, sign_name = state.sign
+        except: sign_glyph, sign_name = "?", "?"
+        try:   orb_str = f"{state.orb:.2f}°"
+        except: orb_str = "?"
 
-        try:
-            orb = f"{state.orb:.2f}°"
-        except Exception:
-            orb = "?"
+        # Equatorial
+        ra_str  = _fmt_ra(state.ra)    if state.ra  is not None else "?"
+        dec_str = f"{state.dec:+.2f}°" if state.dec is not None else "?"
+        try:    constellation = state.constellation or ""
+        except: constellation = ""
 
+        # Horizontal
+        alt_str = f"{state.alt:.2f}°" if state.alt is not None else "?"
+        az_str  = f"{state.az:.2f}°"  if state.az  is not None else "?"
+
+        # Magnitude
+        mag_str = f"{state.app_mag:.2f}" if state.app_mag is not None else ""
+
+        # Phase
         try:
             phase_tuple = state.phase
-            phase_str = f"{phase_tuple[1]} {phase_tuple[0]}" if phase_tuple else None
+            phase_str   = f"{phase_tuple[1]} {phase_tuple[0]}" if phase_tuple else None
         except Exception:
             phase_tuple = None
-            phase_str = None
-
+            phase_str   = None
         phase_angle = getattr(state, "phase_angle", None)
         waxing      = "wax." if getattr(state, "waxing", None) is True else "wan."
-        retrograde  = "℞" if getattr(state, "retrograde", False) else ""
-
         if phase_str is not None and phase_angle is not None:
             has_phase = True
 
-        rows.append((full_name, sign_glyph, sign, orb, retrograde, phase_str, phase_angle, waxing))
+        rows.append((glyph_str, name_str, retrograde,
+                     sign_glyph, sign_name, orb_str,
+                     ra_str, dec_str, constellation,
+                     alt_str, az_str,
+                     mag_str,
+                     phase_str, phase_angle, waxing))
 
     if concise:
-        for full_name, sg, _, orb, _, phase_str, phase_angle, waxing in rows:
-            glyph = full_name.split(" ", 1)[0]
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing) in rows:
+            parts = [f"{g}"]
+            if has_ecliptic:   parts.append(f"{sg} {orb}")
+            if has_equatorial: parts.append(f"{ra} {dec}")
+            if has_horizontal: parts.append(f"alt {alt}  az {az}")
+            if has_mag and mag: parts.append(f"m{mag}")
             if phase_str and phase_angle is not None:
-                phase_glyph = phase_str.split(" ", 1)[0]
-                suffix = f" {phase_glyph} {phase_angle:.2f}° {waxing}"
-            else:
-                suffix = ""
-            print(f"{glyph} {sg} {orb}{suffix}")
+                pg = phase_str.split(" ", 1)[0]
+                parts.append(f"{pg} {phase_angle:.2f}° {waxing}")
+            print("  ".join(parts))
     else:
         table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
-        table.add_column(" ",      no_wrap=True, min_width=2)
-        table.add_column("Name",   no_wrap=True)
-        table.add_column(" ",      no_wrap=True, min_width=2)
-        table.add_column("Sign",   no_wrap=True)
-        table.add_column("Orb",    no_wrap=True, justify="right")
-        table.add_column("℞",      no_wrap=True, min_width=1)
+        table.add_column(" ",    no_wrap=True, min_width=2)
+        table.add_column("Name", no_wrap=True)
+        if has_ecliptic:
+            table.add_column(" ",    no_wrap=True, min_width=2)
+            table.add_column("Sign", no_wrap=True)
+            table.add_column("Orb",  no_wrap=True, justify="right")
+            table.add_column("℞",   no_wrap=True, min_width=1)
+        if has_equatorial:
+            table.add_column("RA",            no_wrap=True, justify="right")
+            table.add_column("Dec",           no_wrap=True, justify="right")
+            table.add_column("Constellation", no_wrap=True)
+        if has_horizontal:
+            table.add_column("Alt", no_wrap=True, justify="right")
+            table.add_column("Az",  no_wrap=True, justify="right")
+        if has_mag:
+            table.add_column("Mag", no_wrap=True, justify="right")
         if has_phase:
             table.add_column(" ",           no_wrap=True, min_width=2)
             table.add_column("Phase",       no_wrap=True)
             table.add_column("Phase Angle", no_wrap=True, justify="right")
             table.add_column("Waxing",      no_wrap=True)
-        for full_name, sign_glyph, sign, orb, retrograde, phase_str, phase_angle, waxing in rows:
-            cel_glyph, cel_name = full_name.split(" ", 1)
-            sign_name = sign.split(" ", 1)[1] if " " in sign else sign
+
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing) in rows:
+            cells: list[str] = [g, name]
+            if has_ecliptic:
+                cells += [sg, sn, orb, retro]
+            if has_equatorial:
+                cells += [ra, dec, con]
+            if has_horizontal:
+                cells += [alt, az]
+            if has_mag:
+                cells.append(mag)
             if has_phase:
-                phase_glyph = phase_str.split(" ", 1)[0] if phase_str else ""
-                phase_name  = phase_str.split(" ", 1)[1] if phase_str and " " in phase_str else ""
-                table.add_row(cel_glyph, cel_name, sign_glyph, sign_name, orb, retrograde,
-                              phase_glyph, phase_name, f"{phase_angle:.2f}°" if phase_angle else "", waxing)
-            else:
-                table.add_row(cel_glyph, cel_name, sign_glyph, sign_name, orb, retrograde)
+                pg = phase_str.split(" ", 1)[0] if phase_str else ""
+                pn = phase_str.split(" ", 1)[1] if phase_str and " " in phase_str else ""
+                cells += [pg, pn, f"{phase_angle:.2f}°" if phase_angle else "", waxing]
+            table.add_row(*cells)
+
         Console().print(table)
 
 
@@ -499,6 +561,8 @@ def _handle_command(args):
         _handle_seek(args)
     elif args.command == "serve":
         _handle_serve(args)
+    elif args.command == "dome":
+        _handle_dome(args)
     elif args.command == "chart":
         if getattr(args, "targets", None) == ["live"]:
             _handle_live(args)
@@ -529,7 +593,7 @@ def _handle_observe(args):
                     step     = args.step,
                     location = args.location,
                     zodiac   = args.zodiac,
-                    frames   = args.frames,
+                    systems  = args.system,
                 )
                 for target in args.targets
             ]
@@ -540,8 +604,10 @@ def _handle_observe(args):
         else:
             # Single-moment observation
             properties: list[str] = ["position"]
-            if "phase" in attributes:
+            if "phase" in attributes or "mag" in attributes:
                 properties.append("phenomenon")
+            if "mag" in attributes:
+                properties.append("magnitude")
 
             states: list[CelestialState] = []
             for target in args.targets:
@@ -551,11 +617,11 @@ def _handle_observe(args):
                     target     = target,
                     zodiac     = args.zodiac,
                     properties = properties,
-                    frames     = args.frames,
+                    systems    = args.system,
                 )
                 states.append(state)
 
-            _display_celestial_states(states, concise=args.concise)
+            _display_celestial_states(states, concise=args.concise, attributes=attributes)
 
             if "aspects" in attributes:
                 print()
@@ -584,7 +650,7 @@ def _handle_chart(args):
                 target     = target,
                 zodiac     = args.zodiac,
                 properties = ["position"],
-                frames     = ["ecliptic"],
+                systems    = ["ecliptic"],
             )
             celestials.append(state)
 
@@ -617,11 +683,11 @@ def _handle_transit_chart(args):
         for target in args.targets:
             natal_celestials.append(cli_wizard.conjure_celestial_state(
                 dt=natal_dt, location=args.location, target=target,
-                zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
+                zodiac=args.zodiac, properties=["position"], systems=["ecliptic"],
             ))
             transit_celestials.append(cli_wizard.conjure_celestial_state(
                 dt=transit_dt, location=args.location, target=target,
-                zodiac=args.zodiac, properties=["position"], frames=["ecliptic"],
+                zodiac=args.zodiac, properties=["position"], systems=["ecliptic"],
             ))
 
         natal_cusps      = cli_wizard.conjure_houses(dt=natal_dt,   location=args.location, zodiac=args.zodiac)
@@ -731,6 +797,67 @@ def _handle_seek(args):
 
     except Exception:
         handle_log("error", "failed to handle seek command", source="cli")
+        traceback.print_exc()
+
+
+def _handle_dome(args):
+    from atlas.view.dome import DomeView
+
+    global cli_wizard
+    if cli_wizard is None:
+        cli_wizard = _initialize_cli(verbose=False)
+
+    targets = args.targets or list(config.get("celestials", {}).keys())
+
+    try:
+        # Fetch planets with both ecliptic and horizontal systems for the panel
+        planets: list[CelestialState] = []
+        for target in targets:
+            try:
+                state = cli_wizard.conjure_celestial_state(
+                    dt         = args.datetime,
+                    location   = args.location,
+                    target     = target,
+                    zodiac     = args.zodiac,
+                    properties = ["position", "phenomenon"],
+                    systems    = ["horizontal", "ecliptic"],
+                )
+                planets.append(state)
+            except ValueError:
+                pass
+
+        # Closure: called by dome on click to fetch a full state for a named body
+        wizard = cli_wizard
+
+        def fetch_fn(name: str) -> "CelestialState":
+            return wizard.conjure_celestial_state(
+                dt         = args.datetime,
+                location   = args.location,
+                target     = name,
+                zodiac     = args.zodiac,
+                properties = ["position", "phenomenon", "magnitude"],
+                systems    = ["ecliptic", "equatorial", "horizontal"],
+            )
+
+        title     = args.title or args.datetime.strftime("%Y-%m-%d  %H:%M")
+        save_path = _resolve_save_path(args.save or default_image_path if args.save is not None else None, ".png")
+
+        DomeView.configure(
+            dt         = args.datetime,
+            location   = args.location,
+            planets    = planets,
+            fetch_fn   = fetch_fn,
+            mag_limit  = args.mag,
+            brightness = args.brightness,
+            save_path  = save_path,
+            title      = title,
+        )
+        DomeView.show()
+
+    except ValueError as e:
+        print(f"Error: {e}")
+    except Exception:
+        handle_log("error", "failed to handle dome command", source="cli")
         traceback.print_exc()
 
 
