@@ -2,6 +2,8 @@
 
 # Standard libraries
 from time import perf_counter_ns
+from typing import Optional
+from functools import lru_cache
 
 # Internal libraries
 from atlas.utils.logger import handle_log
@@ -127,10 +129,20 @@ class EphemerisClient:
 			)
 		return cusps, ascmc
 
+	@staticmethod
+	@lru_cache(maxsize=512)
+	def _cached_calc(target_id: int, jd: float, flags: int) -> tuple:
+		return swe.calc_ut(jd, target_id, flags)
+
+	@staticmethod
+	@lru_cache(maxsize=256)
+	def _cached_fixstar(name: str, jd: float, flags: int) -> tuple:
+		return swe.fixstar2(name, jd, flags)
+
 	# Query the position of a SwissEph planet by integer ID
 	def query_celestial_pos(self, target_id: int, jd: float) -> tuple[tuple, int]:
 		t0 = perf_counter_ns()
-		pos, ret = swe.calc_ut(jd, target_id, self._flags)
+		pos, ret = self._cached_calc(target_id, jd, self._flags)
 		if self._verbose:
 			te = (perf_counter_ns() - t0) / 1_000_000
 			handle_log(
@@ -145,7 +157,10 @@ class EphemerisClient:
 	# Query the position of a fixed star by name string
 	def query_star_pos(self, name: str, jd: float) -> tuple[tuple, int]:
 		t0 = perf_counter_ns()
-		xx, _, ret = swe.fixstar2(name, jd, self._flags)
+		try:
+			xx, _, ret = self._cached_fixstar(name, jd, self._flags)
+		except Exception:
+			raise ValueError(f"star not found: '{name}' — check spelling or sefstars.txt")
 		if self._verbose:
 			te = (perf_counter_ns() - t0) / 1_000_000
 			handle_log(
@@ -156,6 +171,19 @@ class EphemerisClient:
 		if self._coord_system == "horizontal":
 			return self._to_horizontal(xx, jd), ret
 		return xx, ret
+
+	@staticmethod
+	@lru_cache(maxsize=128)
+	def _cached_star_mag(name: str) -> Optional[float]:
+		try:
+			result = swe.fixstar_mag(name)
+			return float(result[0]) if result else None
+		except Exception:
+			return None
+
+	# Query the visual magnitude of a fixed star from the catalog
+	def query_star_mag(self, name: str) -> Optional[float]:
+		return self._cached_star_mag(name)
 
 	# Query the phenomenon of SwissEph body
 	def query_pheno(self, target_id: int, jd: float) -> tuple[tuple, int]:
@@ -171,8 +199,13 @@ class EphemerisClient:
 		ra, dec         = pos[0], pos[1]
 		lat, lon, alt_m = self._topo
 		geopos          = (lon, lat, alt_m)
-		az, _, alt_app  = swe.azalt(jd, swe.EQU2HOR, geopos, 1013.25, 15.0, (ra, dec, 1.0))
+		# swe.azalt returns azimuth measured from south through west;
+		# convert to north-based (compass bearing) by adding 180°
+		az_s, _, alt_app = swe.azalt(jd, swe.EQU2HOR, geopos, 1013.25, 15.0, (ra, dec, 1.0))
+		az              = (az_s + 180.0) % 360.0
 		lst             = (swe.sidtime(jd) * 15.0 + lon) % 360
+
 		ha              = (lst - ra) % 360
 		ha              = ha - 360 if ha > 180 else ha
+
 		return alt_app, az, ha
