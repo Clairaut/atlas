@@ -7,7 +7,7 @@ setup(
     author="clairaut",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    package_data={"atlas": ["view/shaders/*.vert", "view/shaders/*.frag", "data/*.dat", "data/*.npy"]},
+    package_data={"atlas": ["view/shaders/*.vert", "view/shaders/*.frag", "data/*.dat", "data/*.npy", "static/fonts/*.ttf"]},
     install_requires=[
         "pyswisseph",
         "rich",

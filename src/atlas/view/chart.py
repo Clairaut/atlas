@@ -21,7 +21,7 @@ _RGBA = tuple[float, float, float, float]
 # CONSTANTS #
 #-----------#
 
-_STATIC_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../static')
+_STATIC_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../static')
 _SHADER_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shaders')
 _FONT_PATH   = os.path.join(_STATIC_DIR, 'fonts/NotoSans-Regular.ttf')
 _SYMBOL_FONT = os.path.join(_STATIC_DIR, 'fonts/NotoSansSymbols-Regular.ttf')
