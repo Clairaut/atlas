@@ -3,20 +3,18 @@ from datetime import datetime
 import os
 
 # Internal libraries
-from atlas.core.wizard import Wizard
+from atlas.core.atlas import Atlas
 from atlas.core.observatory import Observatory
-from atlas.clients.ephe_client import EphemerisClient
 from atlas.models.location import Location
 
 # External libraries
 from pathlib import Path
 
 
-# Setup Ephemeris Client, Observatory, and Wizard
-ephe_path = Path.home() / ".ephe"
-ephe_client = EphemerisClient(os.fspath(ephe_path), verbose=False)
-observatory = Observatory(ephe_client=ephe_client, dt=datetime.now(), location=Location(lon=0, lat=0, alt=0), verbose=False)
-wizard = Wizard(observatory=observatory, verbose=False)
+# Setup Observatory and Atlas
+ephe_path  = os.fspath(Path.home() / ".ephe")
+observatory = Observatory(ephe_path=ephe_path, dt=datetime.now(), location=Location(lon=0, lat=0, alt=0), verbose=False)
+atlas = Atlas(observatory=observatory, verbose=False)
 
 
 dt = datetime.now()
@@ -24,10 +22,10 @@ location = Location(lon=0, lat=0, alt=0)
 
 
 # Conjure celestial state for the Sun
-c = wizard.conjure_celestial_state(dt=dt, location=location, target="sun")
+c = atlas.build_celestial_state(dt=dt, location=location, target="sun")
 
 # Conjure celestial state for the Moon
-m = wizard.conjure_celestial_state(dt=dt, location=location, target="moon")
+m = atlas.build_celestial_state(dt=dt, location=location, target="moon")
 
 
 print(f"Sun Position at {dt} for location ({location.lat}, {location.lon}, {location.alt}m):")

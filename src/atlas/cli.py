@@ -5,12 +5,11 @@ import argparse
 import traceback
 
 # Internal Modules
-from atlas.core.wizard import Wizard
+from atlas.core.atlas import Atlas
 from atlas.core.observatory import Observatory
-from atlas.clients.ephe_client import EphemerisClient
 from atlas.models.location import Location
 from atlas.models.celestial_state import CelestialState
-from atlas.models.aspect import ASPECT_GLYPHS
+from atlas.models.aspect import ASPECT_GLYPHS, build_aspects, build_transit_aspects
 from atlas.models.event import Event
 from atlas.utils.logger import handle_log
 from atlas.utils.config import load_config
@@ -41,7 +40,7 @@ default_video_path: Optional[str] = config.get("output", {}).get("video") or Non
 default_location_str: str = f"({lat}, {lon}, {alt})"
 default_location = Location(lat=lat, lon=lon, alt=alt)
 
-cli_wizard = None
+cli_atlas = None
 
 
 # Resolve a save path: if it's a directory (no extension), append a timestamped filename
@@ -56,17 +55,15 @@ def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
 
 
 # Initialize the CLI components
-def _initialize_cli(verbose: bool = False) -> Wizard:
-    # Setup Ephemeris Client, Observatory, and Wizard
-    ephe_path = config.get("ephemeris", {}).get("path", "")
-    ephe_client = EphemerisClient(ephe_path=ephe_path, verbose=verbose)
-    observatory = Observatory(ephe_client=ephe_client, dt=convert_to_utc(datetime.now(), default_location), location=default_location, verbose=verbose)
-    wizard = Wizard(observatory=observatory, verbose=verbose)
+def _initialize_cli(verbose: bool = False) -> Atlas:
+    ephe_path   = config.get("ephemeris", {}).get("path", "")
+    observatory = Observatory(ephe_path=ephe_path, dt=convert_to_utc(datetime.now(), default_location), location=default_location, verbose=verbose)
+    atlas       = Atlas(observatory=observatory, verbose=verbose)
 
     if verbose:
         handle_log("info", "CLI components initialized", source="cli")
 
-    return wizard
+    return atlas
 
 
 #=========#
@@ -106,7 +103,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help  = "render a radix, transit, or playback chart",
         usage = "atlas chart [targets]* [options]"
     )
-    default_targets = [k for k, v in config.get("celestials", {}).items() if v.get("orbit") != "star"]
+    default_targets = [k for k, v in config.get("celestials", {}).items() if v.get("type") != "star"]
     chart_parser.add_argument("targets",          help="celestial bodies to include",                              nargs="*", default=default_targets)
     chart_parser.add_argument("--at",             help="chart datetime 'YYYY-MM-DD [HH:MM[:SS]]'",                nargs="?", default=None)
     chart_parser.add_argument("--transit",        help="transit datetime — triggers dual-ring transit chart",      nargs="?", default=None)
@@ -308,7 +305,7 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
     has_equatorial = any(s.ra  is not None for s in states)
     has_horizontal = any(s.alt is not None for s in states)
     # Mag: always show for stars; show for planets only if -a mag requested
-    has_mag        = any(s.app_mag is not None and (s.orbit == "star" or "mag" in attrs) for s in states)
+    has_mag        = any(s.app_mag is not None and (s.type == "star" or "mag" in attrs) for s in states)
     has_phase      = False
 
     rows = []
@@ -411,10 +408,10 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
 
 # Display aspects between a list of states at a single moment
 def _display_aspects(states: list["CelestialState"]):
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli()
-    aspects = cli_wizard.conjure_aspects(states)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli()
+    aspects = build_aspects(states)
     if not aspects:
         print("No aspects found.")
         return
@@ -575,9 +572,9 @@ def _handle_command(args):
 
 
 def _handle_observe(args):
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     has_range   = getattr(args, "from_dt", None) and getattr(args, "to_dt", None)
     attributes  = args.attributes or []
@@ -586,7 +583,7 @@ def _handle_observe(args):
         if has_range:
             # Time-series trace mode — one trace per target, zipped by timestep
             traces_by_target = [
-                cli_wizard.conjure_celestial_trace(
+                cli_atlas.build_celestial_trace(
                     target   = target,
                     start_dt = args.from_dt,
                     end_dt   = args.to_dt,
@@ -611,7 +608,7 @@ def _handle_observe(args):
 
             states: list[CelestialState] = []
             for target in args.targets:
-                state = cli_wizard.conjure_celestial_state(
+                state = cli_atlas.build_celestial_state(
                     dt         = args.datetime,
                     location   = args.location,
                     target     = target,
@@ -637,14 +634,14 @@ def _handle_observe(args):
 def _handle_chart(args):
     from atlas.view.chart import RadixChart
 
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     try:
         celestials = []
         for target in args.targets:
-            state = cli_wizard.conjure_celestial_state(
+            state = cli_atlas.build_celestial_state(
                 dt         = args.datetime,
                 location   = args.location,
                 target     = target,
@@ -654,8 +651,8 @@ def _handle_chart(args):
             )
             celestials.append(state)
 
-        cusps    = cli_wizard.conjure_houses(dt=args.datetime, location=args.location, zodiac=args.zodiac)
-        aspects  = cli_wizard.conjure_aspects(celestials)
+        cusps    = cli_atlas.build_houses(dt=args.datetime, location=args.location, zodiac=args.zodiac)
+        aspects  = build_aspects(celestials)
         title    = args.title or args.datetime.strftime("%Y-%m-%d  %H:%M")
         RadixChart.configure(cusps=cusps, celestials=celestials, aspects=aspects, title=title, save_path=_resolve_save_path(args.save or default_image_path if args.save is not None else None, ".png"))
         RadixChart.show()
@@ -670,9 +667,9 @@ def _handle_chart(args):
 def _handle_transit_chart(args):
     from atlas.view.chart import TransitChart
 
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     try:
         natal_dt   = args.datetime
@@ -681,18 +678,18 @@ def _handle_transit_chart(args):
         natal_celestials   = []
         transit_celestials = []
         for target in args.targets:
-            natal_celestials.append(cli_wizard.conjure_celestial_state(
+            natal_celestials.append(cli_atlas.build_celestial_state(
                 dt=natal_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], systems=["ecliptic"],
             ))
-            transit_celestials.append(cli_wizard.conjure_celestial_state(
+            transit_celestials.append(cli_atlas.build_celestial_state(
                 dt=transit_dt, location=args.location, target=target,
                 zodiac=args.zodiac, properties=["position"], systems=["ecliptic"],
             ))
 
-        natal_cusps      = cli_wizard.conjure_houses(dt=natal_dt,   location=args.location, zodiac=args.zodiac)
-        transit_cusps    = cli_wizard.conjure_houses(dt=transit_dt, location=args.location, zodiac=args.zodiac)
-        transit_aspects  = cli_wizard.conjure_transit_aspects(natal_celestials, transit_celestials)
+        natal_cusps      = cli_atlas.build_houses(dt=natal_dt,   location=args.location, zodiac=args.zodiac)
+        transit_cusps    = cli_atlas.build_houses(dt=transit_dt, location=args.location, zodiac=args.zodiac)
+        transit_aspects  = build_transit_aspects(natal_celestials, transit_celestials)
         title = args.title or f"{natal_dt.strftime('%Y-%m-%d')} → {transit_dt.strftime('%Y-%m-%d')}"
 
         TransitChart.configure_transit(
@@ -713,13 +710,13 @@ def _handle_transit_chart(args):
 def _handle_playback(args):
     from atlas.view.chart import PlaybackChart
 
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     try:
         PlaybackChart.configure_playback(
-            wizard     = cli_wizard,
+            atlas = cli_atlas,
             location   = args.location,
             zodiac     = args.zodiac,
             targets    = args.targets,
@@ -738,15 +735,15 @@ def _handle_playback(args):
 def _handle_live(args):
     from atlas.view.chart import LiveRadixChart
 
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     targets = list(config.get("celestials", {}).keys())
 
     try:
         LiveRadixChart.configure_live(
-            wizard   = cli_wizard,
+            atlas = cli_atlas,
             location = args.location,
             zodiac   = args.zodiac,
             targets  = targets,
@@ -758,9 +755,9 @@ def _handle_live(args):
 
 
 def _handle_seek(args):
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     targets   = args.targets or list(config.get("celestials", {}).keys())
     has_range = getattr(args, "from_dt", None) and getattr(args, "to_dt", None)
@@ -772,7 +769,7 @@ def _handle_seek(args):
         event_details = args.detail or None
 
         if has_range:
-            events = cli_wizard.conjure_events(
+            events = cli_atlas.build_events(
                 targets         = targets,
                 start_dt        = args.from_dt,
                 end_dt          = args.to_dt,
@@ -782,7 +779,7 @@ def _handle_seek(args):
                 event_details   = event_details,
             )
         else:
-            events = cli_wizard.conjure_events(
+            events = cli_atlas.build_events(
                 targets         = targets,
                 start_dt        = args.datetime,
                 end_dt          = args.datetime + timedelta(days=365),
@@ -801,11 +798,11 @@ def _handle_seek(args):
 
 
 def _handle_dome(args):
-    from atlas.view.dome import DomeView
+    from atlas.view.experimental.dome import DomeView
 
-    global cli_wizard
-    if cli_wizard is None:
-        cli_wizard = _initialize_cli(verbose=False)
+    global cli_atlas
+    if cli_atlas is None:
+        cli_atlas = _initialize_cli(verbose=False)
 
     targets = args.targets or list(config.get("celestials", {}).keys())
 
@@ -814,7 +811,7 @@ def _handle_dome(args):
         planets: list[CelestialState] = []
         for target in targets:
             try:
-                state = cli_wizard.conjure_celestial_state(
+                state = cli_atlas.build_celestial_state(
                     dt         = args.datetime,
                     location   = args.location,
                     target     = target,
@@ -827,10 +824,10 @@ def _handle_dome(args):
                 pass
 
         # Closure: called by dome on click to fetch a full state for a named body
-        wizard = cli_wizard
+        atlas = cli_atlas
 
         def fetch_fn(name: str) -> "CelestialState":
-            return wizard.conjure_celestial_state(
+            return atlas.build_celestial_state(
                 dt         = args.datetime,
                 location   = args.location,
                 target     = name,

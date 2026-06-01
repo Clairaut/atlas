@@ -5,9 +5,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Internal Modules
-from atlas.core.wizard import Wizard
+from atlas.core.atlas import Atlas
 from atlas.core.observatory import Observatory
-from atlas.clients.ephe_client import EphemerisClient
 from atlas.models.celestial_state import CelestialState
 from atlas.models.location import Location
 from atlas.utils.config import load_config
@@ -23,7 +22,7 @@ def _serialize(state: CelestialState) -> dict:
     return {
         "glyph":           state.glyph,
         "name":            state.name,
-        "orbit":           state.orbit,
+        "type":            state.type,
         "lon":             state.lon,
         "lat":             state.lat,
         "dist":            state.dist,
@@ -51,10 +50,9 @@ def create_app() -> "Flask":
     _lon: float = cfg.get("location", {}).get("lon", 0)
     _alt: float = cfg.get("location", {}).get("alt", 0)
 
-    _client = EphemerisClient(ephe_path)
     _loc    = Location(lat=_lat, lon=_lon, alt=_alt)
-    _obs    = Observatory(ephe_client=_client, dt=datetime.now(timezone.utc), location=_loc)
-    _wizard = Wizard(observatory=_obs)
+    _obs    = Observatory(ephe_path=ephe_path, dt=datetime.now(timezone.utc), location=_loc)
+    _atlas = Atlas(observatory=_obs)
 
     app = Flask(__name__)
 
@@ -62,9 +60,9 @@ def create_app() -> "Flask":
     @app.before_request
     def _ensure_ephe_path():
         try:
-            _client.set_ephe_path(ephe_path)
+            _obs.set_ephe_path(ephe_path)
         except Exception:
-            _client.set_ephe_path(os.fspath(Path.home() / ".ephe"))
+            _obs.set_ephe_path(os.fspath(Path.home() / ".ephe"))
 
     _available_celestials = list(cfg.get("celestials", {}).keys())
 
@@ -91,7 +89,7 @@ def create_app() -> "Flask":
         now = _parse_dt(at) if at else datetime.now(timezone.utc)
         location = Location(lat=lat, lon=lon, alt=alt)
 
-        cusps = _wizard.conjure_houses(dt=now, location=location, zodiac=zodiac, hsys=hsys)
+        cusps = _atlas.build_houses(dt=now, location=location, zodiac=zodiac, hsys=hsys)
 
         return jsonify({
             "dt": now.isoformat(),
@@ -119,7 +117,7 @@ def create_app() -> "Flask":
             if target not in _available_celestials:
                 continue
 
-            state = _wizard.conjure_celestial_state(
+            state = _atlas.build_celestial_state(
                 dt         = now,
                 location   = location,
                 target     = target,

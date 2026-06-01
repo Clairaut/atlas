@@ -47,7 +47,7 @@ SUPERIOR_PHASE_DEFS: list[tuple[float, str, str]] = [
     (0.95, "Gibbous {name}", "🌔"),
 ]
 
-# Synodic crossing events for superior planets (elongation-based, used by wizard)
+# Synodic crossing events for superior planets (elongation-based)
 # (cycle_angle_deg, name_tpl, glyph) — name_tpl supports {name} substitution
 ELONGATION_EVENTS: list[tuple[float, str, str]] = [
     (0,   "Conjunction {name}",        "☌"),
@@ -62,7 +62,7 @@ class CelestialState:
 	id: Union[int, str]
 	glyph: str
 	name: str
-	orbit: str                  # "inferior" | "superior" | "satellite" | "star"
+	type: str                  # "inferior" | "superior" | "satellite" | "star"
 
 	dt: datetime
 	location: "Location"
@@ -95,7 +95,7 @@ class CelestialState:
 
 	@property
 	def retrograde(self) -> bool:
-		if self.orbit in ("star", "node", "derived"):
+		if self.type in ("star", "node", "derived"):
 			return False
 		if self.dlon is None:
 			return False
@@ -116,7 +116,7 @@ class CelestialState:
 	
 	@property
 	def phase(self) -> Optional[tuple[str, str]]:
-		match self.orbit:
+		match self.type:
 			case "superior":
 				# Illumination-based: superior planets are always gibbous-to-full
 				if self.phase_illuminated is None:

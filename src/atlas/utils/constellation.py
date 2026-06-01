@@ -94,6 +94,7 @@ def identify_constellation(ra_deg: float, dec_deg: float) -> Optional[str]:
     for ra_low, ra_high, dec_low, abbr in boundaries:
         if dec_1875 < dec_low:
             continue
+        
         # Handle RA wraparound (e.g. ra_low=23h, ra_high=24h wraps to 0h)
         in_range = (ra_low <= ra_hours < ra_high) if ra_low < ra_high else (ra_hours >= ra_low or ra_hours < ra_high)
         if in_range and dec_low > best_dec:
