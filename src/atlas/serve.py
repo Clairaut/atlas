@@ -34,9 +34,10 @@ def _serialize(state: CelestialState) -> dict:
         "sign":            sign_name,
         "sign_glyph":      sign_glyph,
         "orb":             round(state.orb, 4),
-        "phase":           phase[0] if phase else None,
-        "phase_glyph":     phase[1] if phase else None,
-        "phase_illuminated": round((state.phase_illuminated or 0), 1)
+        "phase":             phase[0] if phase else None,
+        "phase_glyph":       phase[1] if phase else None,
+        "phase_illuminated": round((state.phase_illuminated or 0), 1),
+        "phase_angle":       round(state.phase_angle, 2) if state.phase_angle is not None else None
     }
 
 
