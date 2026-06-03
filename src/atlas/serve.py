@@ -28,6 +28,7 @@ def _serialize(state: CelestialState) -> dict:
         "dist":            state.dist,
         "dlon":            state.dlon,
         "elong":           state.elong,
+        "elong_waxing":    state.elong_waxing,
         "app_mag":         state.app_mag,
         "app_diam":        state.app_diam,
         "retrograde":      state.retrograde,
@@ -37,7 +38,8 @@ def _serialize(state: CelestialState) -> dict:
         "phase":             phase[0] if phase else None,
         "phase_glyph":       phase[1] if phase else None,
         "phase_illuminated": round((state.phase_illuminated or 0), 1),
-        "phase_angle":       round(state.phase_angle, 2) if state.phase_angle is not None else None
+        "phase_angle":       round(state.phase_angle, 2) if state.phase_angle is not None else None,
+        "phase_waxing":            state.phase_waxing
     }
 
 
