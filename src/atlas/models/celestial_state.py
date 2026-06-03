@@ -90,8 +90,8 @@ class CelestialState:
 	elong: Optional[float] = field(init=False, default=None)
 	app_diam: Optional[float] = field(init=False, default=None)
 	app_mag: Optional[float] = field(init=False, default=None)
-	waxing: Optional[bool] = field(init=False, default=None)
-	waxing_elong: Optional[bool] = field(init=False, default=None)  # elongation-based, for elong_cycle
+	phase_waxing: Optional[bool] = field(init=False, default=None)
+	elong_waxing: Optional[bool] = field(init=False, default=None)  # elongation-based, for elong_cycle
 
 	@property
 	def retrograde(self) -> bool:
@@ -137,18 +137,18 @@ class CelestialState:
 	def phase_cycle(self) -> Optional[float]:
 		# 0-360° monotonic cycle mapped from SwissEph phase_angle (Sun-body-Earth, 180°=new, 0°=full)
 		# 0° = new, 90° = first quarter, 180° = full, 270° = last quarter
-		if self.phase_angle is None or self.waxing is None:
+		if self.phase_angle is None or self.phase_waxing is None:
 			return None
 		# phase_angle decreases new→full (180°→0°), so invert to get an increasing 0→360° cycle
-		return (180.0 - self.phase_angle) if self.waxing else (180.0 + self.phase_angle)
+		return (180.0 - self.phase_angle) if self.phase_waxing else (180.0 + self.phase_angle)
 
 	@property
 	def elong_cycle(self) -> Optional[float]:
 		# 0-360° monotonic synodic cycle from elongation + waxing_elong (superior planets)
 		# 0° = conjunction, 90° = eastern quadrature, 180° = opposition, 270° = western quadrature
-		if self.elong is None or self.waxing_elong is None:
+		if self.elong is None or self.elong_waxing is None:
 			return None
-		return self.elong if self.waxing_elong else 360.0 - self.elong
+		return self.elong if self.elong_waxing else 360.0 - self.elong
 
 
 	@property
@@ -182,5 +182,5 @@ class CelestialState:
 	def apply_pheno(self, pheno: tuple) -> None:
 		if len(pheno) != 7:
 			raise ValueError(f"Expected 7 values for phenomenon, got {len(pheno)}: {pheno}")
-		self.phase_angle, self.phase_illuminated, self.elong, self.app_diam, self.app_mag, self.waxing, self.waxing_elong = pheno
+		self.phase_angle, self.phase_illuminated, self.elong, self.app_diam, self.app_mag, self.phase_waxing, self.elong_waxing = pheno
 

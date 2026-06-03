@@ -234,7 +234,7 @@ class InfoPanel:
         try:
             pt = state.phase
             if pt:
-                direction = " (waxing)" if state.waxing is True else (" (waning)" if state.waxing is False else "")
+                direction = " (waxing)" if state.phase_waxing is True else (" (waning)" if state.phase_waxing is False else "")
                 row("Phase", f"{pt[0]}{direction}")
         except Exception:
             pass
