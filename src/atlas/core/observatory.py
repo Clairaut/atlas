@@ -357,7 +357,8 @@ class Observatory:
 		pheno_now  = swe.pheno_ut(self._jd,        target_id, self._flags)[:5]
 		pheno_prev = swe.pheno_ut(self._jd - 1e-5, target_id, self._flags)[:5]
 
-		waxing       = pheno_now[1] >= pheno_prev[1]
+		# phase_angle (index 0) decreases waxing→full: more numerically stable at full moon than illumination
+		waxing       = pheno_now[0] <= pheno_prev[0]
 		waxing_elong = pheno_now[2] >= pheno_prev[2]
 		result       = (*pheno_now, waxing, waxing_elong)
 

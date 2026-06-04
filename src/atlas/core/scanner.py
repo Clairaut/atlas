@@ -34,7 +34,7 @@ class Scanner:
     ) -> list[Event]:
 
         def _keep(evts: list[Event]) -> list[Event]:
-            return [e for e in evts if event_details is None or e.detail in event_details]
+            return [e for e in evts if event_details is None or any(d.lower() in e.detail.lower() for d in event_details)]
 
         events:          list[Event] = []
         prev_states:     Optional[list[CelestialState]] = None
@@ -217,16 +217,24 @@ class Scanner:
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
         events: list[Event] = []
+
+        # Loop through each celestial state
         for k, (state, prev) in enumerate(zip(states, prev_states)):
-            if state.type not in ("inferior", "satellite"):
-                continue
             ang_now  = state.phase_cycle
             ang_prev = prev.phase_cycle
+            
+            # If an angle is null, skip
             if ang_now is None or ang_prev is None:
                 continue
+
+            # Loop through each phase angle, label and glyph
             for target_angle, label, phase_glyph in PHASE_DEFS:
+
+                # Get the current and previous residual phase angle
                 res_now  = _normalize(ang_now  - target_angle)
                 res_prev = _normalize(ang_prev - target_angle)
+
+                # If the product of the prev and current residual is zero, then the target has been reached
                 if res_prev * res_now <= 0 and abs(res_now) < 90:
                     exact_dt = self._bisect_event(
                         lambda t, k=k, ta=target_angle: self._phase_residual(targets[k], t, ta),

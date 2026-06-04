@@ -124,28 +124,39 @@ def _build_parser() -> argparse.ArgumentParser:
             "Finds celestial events by type.\n\n"
             "  no --from/--to  — next N occurrences from --at or now (see --limit)\n"
             "  with --from/--to — all matching event entrances in that range\n\n"
-            "  For currently active aspects use: atlas observe -a aspects"
+            "  For currently active aspects use: atlas observe -a aspects\n\n"
+            "--detail keywords by type:\n"
+            "  phase      new, waxing crescent, first quarter, waxing gibbous,\n"
+            "             full, waning gibbous, last quarter, waning crescent\n"
+            "  ingress    aries, taurus, gemini, cancer, leo, virgo,\n"
+            "             libra, scorpio, sagittarius, capricorn, aquarius, pisces\n"
+            "  station    retrograde, direct\n"
+            "  aspect     conjunction, sextile, square, trine, opposition\n"
+            "  elongation conjunction, eastern quadrature, opposition, western quadrature\n"
+            "  diurnal    rising, setting, culmination, anti-culmination\n\n"
+            "  --detail matches are case-insensitive substrings (e.g. 'full' matches 'Full Moon')"
         ),
         usage           = "atlas seek {type} [targets]* [options]",
         epilog          = (
             "examples:\n"
-            "  atlas seek aspect                              next aspect entrance\n"
-            "  atlas seek aspect --detail trine              next trine entrance\n"
-            "  atlas seek aspect --limit 3                   next 3 aspect entrances\n"
-            "  atlas seek phase moon --detail full           next full moon\n"
-            "  atlas seek phase moon --detail full --limit 6 next 6 full moons\n"
-            "  atlas seek ingress moon --detail scorpio      next moon into Scorpio\n"
-            "  atlas seek station mercury -c                 next mercury station, compact\n"
-            "  atlas seek aspect --from 2026-01-01 --to 2026-06-01  aspect entrances in range\n"
-            "  atlas seek diurnal moon                        next moonrise/set/culmination\n"
-            "  atlas seek diurnal sun --detail setting        next sunset\n"
-            "  atlas seek diurnal moon --detail rising        next moonrise"
+            "  atlas seek aspect                                       next aspect entrance\n"
+            "  atlas seek aspect --detail trine                        next trine entrance\n"
+            "  atlas seek aspect --limit 3                             next 3 aspect entrances\n"
+            "  atlas seek phase moon --detail full                     next full moon\n"
+            "  atlas seek phase moon --detail full --limit 6           next 6 full moons\n"
+            "  atlas seek ingress moon --detail scorpio                next moon into Scorpio\n"
+            "  atlas seek station mercury -c                           next mercury station, compact\n"
+            "  atlas seek elongation venus --detail eastern            next venus eastern quadrature\n"
+            "  atlas seek aspect --from 2026-01-01 --to 2026-06-01    all aspects in range\n"
+            "  atlas seek diurnal moon                                 next moonrise/set/culmination\n"
+            "  atlas seek diurnal sun --detail setting                 next sunset\n"
+            "  atlas seek diurnal moon --detail rising                 next moonrise"
         ),
         formatter_class = argparse.RawDescriptionHelpFormatter,
     )
     seek_parser.add_argument("type",      help="event type: phase, ingress, station, aspect, elongation, diurnal", nargs="?", choices=["phase", "ingress", "station", "aspect", "elongation", "diurnal"], default=None)
     seek_parser.add_argument("targets",   help="celestial bodies to scan",                                   nargs="*", default=[])
-    seek_parser.add_argument("--detail",  help="filter by detail e.g. full, scorpio, trine, retrograde",    nargs="*", default=[])
+    seek_parser.add_argument("--detail",  help="filter by detail (case-insensitive substring match)",        nargs="*", default=[])
     seek_parser.add_argument("--at",      help="moment or search start 'YYYY-MM-DD [HH:MM[:SS]]'",          nargs="?", default=None)
     seek_parser.add_argument("--from",    help="range start — with --to, returns event entrances in range",  nargs="?", default=None, dest="from_dt")
     seek_parser.add_argument("--to",      help="range end   — with --from, returns event entrances in range",nargs="?", default=None, dest="to_dt")

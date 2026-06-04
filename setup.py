@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="atlas",
-    version="0.2.6",
+    version="0.2.7",
     description="A SwissEph interface for visualizing astrological/astronomical data.",
     author="clairaut",
     package_dir={"": "src"},
