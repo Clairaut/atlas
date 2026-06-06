@@ -5,9 +5,9 @@ from time import perf_counter_ns
 from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+import logging
 
 # Internal Modules
-from atlas.utils.logger import handle_log
 
 # External Modules
 import swisseph as swe
@@ -63,14 +63,6 @@ class Observatory:
 		else:
 			self.__location = None
 
-		if verbose:
-			handle_log(
-				"info",
-				"initialized Observatory (dt=%s, location=%s)",
-				dt, location,
-				source="observatory"
-			)
-
 
 	 #=======#
 	# SWE API #
@@ -81,7 +73,7 @@ class Observatory:
 		self._ephe_path = ephe_path
 		swe.set_ephe_path(ephe_path)
 		if self._verbose:
-			handle_log("info", "set ephemeris path to %s", ephe_path)
+			logging.info("set ephemeris path to %s", ephe_path)
 
 	# Set topography; re-applies ephe path since some SwissEph versions reset it internally
 	def _set_ephe_topo(self, lat: float, lon: float, alt: float) -> None:
@@ -137,24 +129,10 @@ class Observatory:
 		self.__location = location
 		if location is not None:
 			self._set_ephe_topo(location.lat, location.lon, location.alt)
-			if self._verbose:
-				handle_log(
-					"info",
-					"ok topo set (lat=%.6f, lon=%.6f, alt=%.1f)",
-					location.lat, location.lon, location.alt,
-					source="observatory"
-				)
 
 	@property
 	def _jd(self) -> float:
 		dt = self.dt or datetime.now(timezone.utc)
-		if self._verbose and self.dt is None:
-			handle_log(
-				"warning",
-				"warning _jd: observatory time null; defaulting to present UTC: %s",
-				dt,
-				source="observatory"
-			)
 
 		if (self._jd_dt == dt) and (self._jd_cache is not None):
 			return self._jd_cache
@@ -178,14 +156,6 @@ class Observatory:
 		if location:
 			self._location = location
 
-		if self._verbose:
-			handle_log(
-				"info",
-				"ok observatory setting (dt=%s, location:%s)",
-				self.dt, self._location,
-				source="observatory"
-			)
-
 		return self
 
 	# Shift observatory datetime/location
@@ -194,15 +164,8 @@ class Observatory:
 			if self.dt:
 				dt_temp  = self.dt
 				self.dt += t_delta
-				if self._verbose:
-					handle_log(
-						"info",
-						"ok observatory time shift (%s to %s)",
-						dt_temp, self.dt,
-						source="observatory"
-					)
 			else:
-				handle_log("error", "bad observatory time shift: dt not set")
+				logging.error("bad observatory time shift: dt not set")
 				raise ValueError("Failed to shift observatory time: dt is not yet set")
 
 		if l_delta:
@@ -211,16 +174,8 @@ class Observatory:
 				old_loc          = self._location
 				new_loc          = type(old_loc)(lat=old_loc.lat + dlat, lon=old_loc.lon + dlon, alt=old_loc.alt + dalt)
 				self._location   = new_loc
-				if self._verbose:
-					handle_log(
-						"info",
-						"ok observatory location shift ((%f, %f, %f) to (%f, %f, %f))",
-						old_loc.lat, old_loc.lon, old_loc.alt,
-						self._location.lon, self._location.lat, self._location.alt, # type: ignore
-						source="observatory"
-					)
 			else:
-				handle_log("error", "bad observatory location shift: location not set")
+				logging.error("bad observatory location shift: location not set")
 				raise ValueError("Failed to shift observatory location: location is not yet set")
 
 		return self
@@ -235,7 +190,7 @@ class Observatory:
 		if aya:
 			aya_code = self._AYA_ALIASES.get(aya.lower())
 			if not aya_code:
-				handle_log("error", "bad observatory alignment: ayanamsa not found (aya=%s)", aya)
+				logging.error("bad observatory alignment: ayanamsa not found (aya=%s)", aya)
 				raise ValueError(f"Unknown ayanamsa {aya}")
 			match aya_code:
 				case "L": swe.set_sid_mode(swe.SIDM_LAHIRI,        0.0, 0.0)
@@ -246,7 +201,7 @@ class Observatory:
 				case "D": swe.set_sid_mode(swe.SIDM_DELUCE,        0.0, 0.0)
 
 		if self._verbose:
-			handle_log("info", "ok observatory alignment (zodiac=%s, aya=%s, flags=%s)", zodiac, aya, self._flags)
+			logging.info("ok observatory alignment (zodiac=%s, aya=%s, flags=%s)", zodiac, aya, self._flags)
 		return self
 
 	# Set coordinate system
@@ -258,7 +213,7 @@ class Observatory:
 			self._flags |= swe.FLG_EQUATORIAL
 
 		if self._verbose:
-			handle_log("info", "ok observatory projection (system=%s, flags=%s)", system, self._flags)
+			logging.info("ok observatory projection (system=%s, flags=%s)", system, self._flags)
 		return self
 
 	# Orient the reference frame
@@ -274,18 +229,18 @@ class Observatory:
 				self._flags = (self._flags & ~self._FRAME_MASK) | swe.FLG_TOPOCTR
 
 		if self._verbose:
-			handle_log("info", "ok observatory orientation (frame=%s, flags=%s)", frame, self._flags)
+			logging.info("ok observatory orientation (frame=%s, flags=%s)", frame, self._flags)
 		return self
 
 	# Select the house division system
 	def domify(self, system: str):
 		hsys = self._HSYS_ALIASES.get(system.lower())
 		if not hsys:
-			handle_log("error", "bad observatory domification: system not found (system=%s)", system)
+			logging.error("bad observatory domification: system not found (system=%s)", system)
 			raise ValueError(f"Unknown house system {system}")
 		self._hsys = hsys
 		if self._verbose:
-			handle_log("info", "ok observatory domification (system=%s, hsys=%c)", system, hsys)
+			logging.info("ok observatory domification (system=%s, hsys=%c)", system, hsys)
 		return self
 
 
@@ -296,12 +251,12 @@ class Observatory:
 	# Cast house cusps
 	def cast(self) -> tuple[tuple, tuple]:
 		if not self._location:
-			handle_log("error", "bad observatory cast: location is not yet set")
+			logging.error("bad observatory cast: location is not yet set")
 			raise ValueError("Failed to cast observatory cusps/ascmc: location is not yet set")
 		cusps, ascmc = swe.houses(self._jd, self._location.lat, self._location.lon, self._hsys.encode()) # type: ignore
 
 		if self._verbose:
-			handle_log("info", "ok observatory cast (dt=%s, location=%s)", self.dt, self._location)
+			logging.info("ok observatory cast (dt=%s, location=%s)", self.dt, self._location)
 
 		return cusps, ascmc
 
@@ -312,7 +267,7 @@ class Observatory:
 			pos, ret = self._cached_calc(target_id, self._jd, self._flags)
 			if self._verbose:
 				te = (perf_counter_ns() - t0) / 1_000_000
-				handle_log("info", "calc_ut(target=%i, jd=%.6f) -> ret=%i; took %.2f ms", target_id, self._jd, ret, te)
+				logging.info("calc_ut(target=%i, jd=%.6f) -> ret=%i; took %.2f ms", target_id, self._jd, ret, te)
 		else:
 			t0 = perf_counter_ns()
 			try:
@@ -322,25 +277,14 @@ class Observatory:
 			pos = xx
 			if self._verbose:
 				te = (perf_counter_ns() - t0) / 1_000_000
-				handle_log("info", "fixstar2(name=%s, jd=%.6f) -> ret=%i; took %.2f ms", target_id, self._jd, ret, te)
+				logging.info("fixstar2(name=%s, jd=%.6f) -> ret=%i; took %.2f ms", target_id, self._jd, ret, te)
 
 		if ret < 0:
-			handle_log(
-				"error",
-				"bad observatory observation; (error-code=%i, target_id=%s, dt=%s, location=%s)",
-				ret, target_id, self.dt, self._location
-			)
 			raise RuntimeError(f"SwissEph error-code {ret} for target: {target_id}")
 
 		if self._coord_system == "horizontal":
 			pos = self._to_horizontal(pos, self._jd, self._topo)
 
-		if self._verbose:
-			handle_log(
-				"info",
-				"ok observatory observation; (target=%s, dt=%s, location=%s)",
-				target_id, self.dt, self._location
-			)
 		return pos
 
 	# Retrieve a static catalog attribute for a target
@@ -361,13 +305,5 @@ class Observatory:
 		waxing       = pheno_now[0] <= pheno_prev[0]
 		waxing_elong = pheno_now[2] >= pheno_prev[2]
 		result       = (*pheno_now, waxing, waxing_elong)
-
-		if self._verbose:
-			te = (perf_counter_ns() - t0) / 1_000_000
-			handle_log(
-				"info",
-				"ok observatory profile; (target ID=%i, dt=%s, location=%s, took %.2f ms)",
-				target_id, self.dt, self._location, te
-			)
 
 		return result

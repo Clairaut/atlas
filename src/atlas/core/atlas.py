@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timedelta
 
 # Internal Modules
-from atlas.utils.logger import handle_log
 from atlas.utils.config import load_config
 from atlas.models.celestial_state import CelestialState
 from atlas.models.event import Event
@@ -58,13 +57,13 @@ class Atlas:
 
                 c.apply_pos(pos, system)
                 if self._verbose:
-                    handle_log("info", "celestial position: system=%s, pos=%s", system, pos, source="atlas")
+                    logging.info("celestial position: system=%s, pos=%s", system, pos)
 
         if "phenomenon" in properties and c.type not in ("star", "node", "derived"):
             pheno = self._observatory.profile(int(c.id))
             c.apply_pheno(pheno)
             if self._verbose:
-                handle_log("info", "celestial phenomenon: pheno=%s", pheno, source="atlas")
+                logging.info("celestial phenomenon: pheno=%s", pheno)
 
         if "magnitude" in properties and c.type == "star":
             c.app_mag = self._observatory.measure(str(c.id), "star_magnitude")

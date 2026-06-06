@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: atlas
-Version: 0.1.0
+Version: 0.2.7
 Summary: A SwissEph interface for visualizing astrological/astronomical data.
 Author: clairaut
 Requires-Python: >=3.9

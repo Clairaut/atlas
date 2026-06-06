@@ -6,8 +6,8 @@ import os
 import math
 from typing import Optional
 
-# Internal Modules
-from atlas.utils.logger import handle_log
+# Standard Modules (continued)
+import logging
 
 # External Modules
 import moderngl
@@ -78,7 +78,7 @@ class GlyphAtlas:
         try:
             font = ImageFont.truetype(font_path, size=cell_size - 8)
         except Exception:
-            handle_log("warning", "glyph atlas: font not found at %s, using default", font_path)
+            logging.warning("glyph atlas: font not found at %s, using default", font_path)
             font = ImageFont.load_default()
 
         for i, ch in enumerate(chars):
@@ -181,7 +181,7 @@ class BaseGLWindow(moderngl_window.WindowConfig):  # type: ignore
         data = self.ctx.screen.read(viewport=(x, y, w, h))
         img  = Image.frombytes('RGB', (w, h), data).transpose(Image.FLIP_TOP_BOTTOM)  # type: ignore
         img.save(path)
-        handle_log("info", "saved: %s", path)
+        logging.info("saved: %s", path)
 
     @classmethod
     def show(cls) -> None:

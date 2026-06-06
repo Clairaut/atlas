@@ -679,9 +679,9 @@ class PlaybackChart(LiveRadixChart):
                     arr = np.frombuffer(frame_bytes, dtype=np.uint8).reshape(h, w, 3)
                     arr = np.flipud(arr)
                     writer.append_data(arr)
-            handle_log("info", "video saved: %s", path, source="chart")
+            logging.info("video saved: %s", path)
         except ImportError:
-            handle_log("error", "imageio required for video export: pip install imageio[ffmpeg]", source="chart")
+            logging.error("imageio required for video export: pip install imageio[ffmpeg]")
 
 
 #---------------#

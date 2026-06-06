@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Optional, Callable, TYPE_CHECKING
 
 # Internal Modules
-from atlas.utils.logger import handle_log
 from atlas.view.base import (
     BaseGLWindow, GlyphAtlas, _RGBA, _ortho, _circle_verts, _glyph_quad,
     _strip_var_selector, _FONT_PATH, _SYMBOL_FONT, TEXT_CHARS, SYMBOL_CHARS,
@@ -392,7 +391,7 @@ class DomeView(BaseGLWindow):
 
         cat_path = str(Path(_DATA_DIR) / "stars.npy")
         if not Path(cat_path).exists():
-            handle_log("warning", "stars.npy not found — run scripts/convert_hyg.py", source="dome")
+            logging.warning("stars.npy not found — run scripts/convert_hyg.py")
             self._star_vbo_data = np.empty((0, 6), dtype=np.float32)
             self._n_stars = 0
             return
@@ -724,7 +723,7 @@ class DomeView(BaseGLWindow):
                 self._panel.show_state(self._fetch_fn(name))
                 return
             except Exception as e:
-                handle_log("warning", f"fetch failed for '{name}': {e}", source="dome")
+                logging.warning(f"fetch failed for '{name}': {e}")
         self._panel.show_raw({"name": name, "type": "planet"})
 
     def _select_star(self, idx: int) -> None:

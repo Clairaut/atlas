@@ -1,13 +1,13 @@
 # src/utils/config.py
 
 # Standard libraries
+import logging
 from pathlib import Path
-
-# Internal libraries
-from atlas.utils.logger import handle_log
 
 # External libraries
 import tomllib
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_CONFIG = """# Atlas configuration
@@ -55,11 +55,11 @@ def load_config() -> dict:
 	if not config_file.exists():
 		config_dir.mkdir(parents=True, exist_ok=True)
 		config_file.write_text(DEFAULT_CONFIG)
-		handle_log("warning", "config missing - created default at %s", config_file)
+		logging.warning("config missing - created default at %s", config_file)
 
 	# Open config file with read binary
 	with config_file.open("rb") as f:
 		config = tomllib.load(f)
 
-	handle_log("info", "config loaded from %s", config_file)
+	logging.info("config loaded from %s", config_file)
 	return config

@@ -2,6 +2,7 @@
 from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timedelta, timezone
 import argparse
+import logging
 import traceback
 
 # Internal Modules
@@ -11,7 +12,6 @@ from atlas.models.location import Location
 from atlas.models.celestial_state import CelestialState
 from atlas.models.aspect import ASPECT_GLYPHS, build_aspects, build_transit_aspects
 from atlas.models.event import Event
-from atlas.utils.logger import handle_log
 from atlas.utils.config import load_config
 from atlas.utils.chrono import convert_to_utc, utc_to_local
 
@@ -61,7 +61,7 @@ def _initialize_cli(verbose: bool = False) -> Atlas:
     atlas       = Atlas(observatory=observatory, verbose=verbose)
 
     if verbose:
-        handle_log("info", "CLI components initialized", source="cli")
+        logging.info("CLI components initialized")
 
     return atlas
 
@@ -237,7 +237,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
         try:
             args.at = _parse_datetime(args.at)
         except ValueError:
-            handle_log("error", "invalid --at argument", source="cli")
+            logging.error("invalid --at argument")
             args.at = datetime.now()
     elif hasattr(args, "at"):
         args.at = datetime.now()
@@ -248,7 +248,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
             try:
                 setattr(args, attr, _parse_datetime(getattr(args, attr)))
             except ValueError:
-                handle_log("error", "invalid --%s argument", attr.replace("_", ""), source="cli")
+                logging.error("invalid --%s argument", attr.replace("_", ""))
                 setattr(args, attr, None)
 
     # Parse --step
@@ -256,7 +256,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
         try:
             args.step = _parse_step(args.step)
         except ValueError:
-            handle_log("error", "invalid --step argument", source="cli")
+            logging.error("invalid --step argument")
             args.step = timedelta(days=1)
 
     # Parse --transit datetime (chart command)
@@ -264,7 +264,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
         try:
             args.transit = _parse_datetime(args.transit)
         except ValueError:
-            handle_log("error", "invalid --transit argument", source="cli")
+            logging.error("invalid --transit argument")
             args.transit = None
 
     # Parse --location
@@ -275,7 +275,7 @@ def _parse_arguments(parser: argparse.ArgumentParser):
             lat, lon, alt = (parts + [0.0])[:3] if len(parts) == 2 else parts[:3]
             args.location = Location(lat, lon, alt)
         except ValueError:
-            handle_log("error", "invalid --location argument", source="cli")
+            logging.error("invalid --location argument")
             args.location = default_location
 
     # Convert --at to UTC using resolved location
@@ -638,7 +638,7 @@ def _handle_observe(args):
     except ValueError as e:
         print(f"Error: {e}")
     except Exception:
-        handle_log("error", "failed to handle observation command", source="cli")
+        logging.error("failed to handle observation command")
         traceback.print_exc()
 
 
@@ -671,7 +671,7 @@ def _handle_chart(args):
     except ValueError as e:
         print(f"Error: {e}")
     except Exception:
-        handle_log("error", "failed to handle chart command", source="cli")
+        logging.error("failed to handle chart command")
         traceback.print_exc()
 
 
@@ -714,7 +714,7 @@ def _handle_transit_chart(args):
     except ValueError as e:
         print(f"Error: {e}")
     except Exception:
-        handle_log("error", "failed to handle transit chart command", source="cli")
+        logging.error("failed to handle transit chart command")
         traceback.print_exc()
 
 
@@ -739,7 +739,7 @@ def _handle_playback(args):
         )
         PlaybackChart.show()
     except Exception:
-        handle_log("error", "failed to handle playback command", source="cli")
+        logging.error("failed to handle playback command")
         traceback.print_exc()
 
 
@@ -761,7 +761,7 @@ def _handle_live(args):
         )
         LiveRadixChart.show()
     except Exception:
-        handle_log("error", "failed to handle live command", source="cli")
+        logging.error("failed to handle live command")
         traceback.print_exc()
 
 
@@ -804,7 +804,7 @@ def _handle_seek(args):
         _display_seek_results(events, location=args.location, concise=args.concise)
 
     except Exception:
-        handle_log("error", "failed to handle seek command", source="cli")
+        logging.error("failed to handle seek command")
         traceback.print_exc()
 
 
@@ -865,7 +865,7 @@ def _handle_dome(args):
     except ValueError as e:
         print(f"Error: {e}")
     except Exception:
-        handle_log("error", "failed to handle dome command", source="cli")
+        logging.error("failed to handle dome command")
         traceback.print_exc()
 
 
@@ -876,7 +876,7 @@ def _handle_serve(args):
     except ImportError:
         print("Flask is not installed. Run: pip install flask")
     except Exception:
-        handle_log("error", "failed to start server", source="cli")
+        logging.error("failed to start server")
         traceback.print_exc()
 
 
