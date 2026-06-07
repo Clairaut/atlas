@@ -218,7 +218,7 @@ atlas dome --mag 5.0                   # brighter stars only
 
 ### `serve`
 
-Start the Atlas REST API server.
+Start the Atlas REST API server with FastAPI/Uvicorn.
 
 ```
 atlas serve [options]
@@ -241,6 +241,7 @@ atlas serve [options]
 ```bash
 atlas serve                          # start on 127.0.0.1:5001
 atlas serve --port 8080              # custom port
+uvicorn atlas.serve:create_app --factory --host 127.0.0.1 --port 5001
 
 curl "http://127.0.0.1:5001/observe"
 curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T12:00:00"
@@ -264,7 +265,7 @@ Atlas reads from `~/.config/atlas/atlas.toml`, creating a default if missing.
 ```
 src/atlas/
 ├── cli.py                    # argument parsing and display
-├── serve.py                  # Flask REST API server
+├── serve.py                  # FastAPI REST API server
 ├── core/
 │   ├── atlas.py              # high-level state and event building
 │   ├── observatory.py        # coordinate systems, JD, SwissEph calls

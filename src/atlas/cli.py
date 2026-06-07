@@ -874,7 +874,7 @@ def _handle_serve(args):
         from atlas.serve import run
         run(host=args.host, port=args.port)
     except ImportError:
-        print("Flask is not installed. Run: pip install flask")
+        print("FastAPI/Uvicorn is not installed. Run: pip install fastapi uvicorn")
     except Exception:
         logging.error("failed to start server")
         traceback.print_exc()

@@ -1,6 +1,7 @@
 # Standard Modules
 import os
-from datetime import datetime, timedelta, timezone
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,7 +13,7 @@ from atlas.models.location import Location
 from atlas.utils.config import load_config
 
 if TYPE_CHECKING:
-    from flask import Flask
+    from fastapi import FastAPI
 
 
 # Serialize a CelestialState to a JSON-safe dict
@@ -43,9 +44,9 @@ def _serialize(state: CelestialState) -> dict:
     }
 
 
-# Build and return a configured Flask app
-def create_app() -> "Flask":
-    from flask import Flask, jsonify, request
+# Build and return a configured FastAPI app
+def create_app() -> "FastAPI":
+    from fastapi import FastAPI, HTTPException
 
     cfg       = load_config()
     ephe_path = cfg.get("ephemeris", {}).get("path") or os.fspath(Path.home() / ".ephe")
@@ -56,11 +57,11 @@ def create_app() -> "Flask":
     _loc    = Location(lat=_lat, lon=_lon, alt=_alt)
     _obs    = Observatory(ephe_path=ephe_path, dt=datetime.now(timezone.utc), location=_loc)
     _atlas = Atlas(observatory=_obs)
+    _lock = threading.Lock()
 
-    app = Flask(__name__)
+    app = FastAPI(title="Atlas", version="0.3.0")
 
-    # Ensure SwissEph path is set per-request (thread-local state may not carry over)
-    @app.before_request
+    # Ensure SwissEph path is set per request.
     def _ensure_ephe_path():
         try:
             _obs.set_ephe_path(ephe_path)
@@ -77,74 +78,93 @@ def create_app() -> "Flask":
             except ValueError:
                 continue
         raise ValueError(f"unrecognized datetime format: '{s}'")
-    
+
 
     # Return house cusps for a given time, location, and house system
     @app.get("/cast")
-    def cast():
-        at: str = request.args.get("at", default="", type=str)  # type: ignore
-        zodiac: str = request.args.get("zodiac", default="tropical", type=str)  # type: ignore
-        hsys: str = request.args.get("hsys", default="placidus", type=str)  # type: ignore
-        lat: float = request.args.get("lat", default=_lat, type=float)  # type: ignore
-        lon: float = request.args.get("lon", default=_lon, type=float)  # type: ignore
-        alt: float = request.args.get("alt", default=_alt, type=float)  # type: ignore
+    def cast(
+        at: str = "",
+        zodiac: str = "tropical",
+        hsys: str = "placidus",
+        lat: float = _lat,
+        lon: float = _lon,
+        alt: float = _alt,
+    ):
+        try:
+            now = _parse_dt(at) if at else datetime.now(timezone.utc)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
-        now = _parse_dt(at) if at else datetime.now(timezone.utc)
         location = Location(lat=lat, lon=lon, alt=alt)
 
-        cusps = _atlas.build_houses(dt=now, location=location, zodiac=zodiac, hsys=hsys)
+        try:
+            with _lock:
+                _ensure_ephe_path()
+                cusps = _atlas.build_houses(dt=now, location=location, zodiac=zodiac, hsys=hsys)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
-        return jsonify({
+        return {
             "dt": now.isoformat(),
             "location": {"lat": lat, "lon": lon, "alt": alt},
             "hsys": hsys,
             "cusps": {str(i + 1): round(c, 6) for i, c in enumerate(cusps)},
-        })
+        }
 
     # Return current positions for requested celestial bodies
     @app.get("/observe")
-    def observe():
-        raw_targets: str = request.args.get("targets", default="", type=str)  # type: ignore
-        targets: list[str] = [t.strip() for t in raw_targets.split(",") if t.strip()] or _available_celestials
-        at: str = request.args.get("at", default="", type=str)  # type: ignore
-        zodiac: str = request.args.get("zodiac", default="tropical", type=str)  # type: ignore
-        lat: float = request.args.get("lat", default=_lat, type=float)  # type: ignore
-        lon: float = request.args.get("lon", default=_lon, type=float)  # type: ignore
-        alt: float = request.args.get("alt", default=_alt, type=float)  # type: ignore
+    def observe(
+        targets: str = "",
+        at: str = "",
+        zodiac: str = "tropical",
+        lat: float = _lat,
+        lon: float = _lon,
+        alt: float = _alt,
+    ):
+        target_names: list[str] = [t.strip() for t in targets.split(",") if t.strip()] or _available_celestials
+        try:
+            now = _parse_dt(at) if at else datetime.now(timezone.utc)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
-        now = _parse_dt(at) if at else datetime.now(timezone.utc)
         location = Location(lat=lat, lon=lon, alt=alt)
         bodies   = {}
 
-        for target in targets:
-            if target not in _available_celestials:
-                continue
+        try:
+            with _lock:
+                _ensure_ephe_path()
+                for target in target_names:
+                    if target not in _available_celestials:
+                        continue
 
-            state = _atlas.build_celestial_state(
-                dt         = now,
-                location   = location,
-                target     = target,
-                zodiac     = zodiac,
-                properties = ["position", "phenomenon"],
-                systems    = ["ecliptic"],
-            )
+                    state = _atlas.build_celestial_state(
+                        dt         = now,
+                        location   = location,
+                        target     = target,
+                        zodiac     = zodiac,
+                        properties = ["position", "phenomenon"],
+                        systems    = ["ecliptic"],
+                    )
 
-            bodies[target] = _serialize(state)
+                    bodies[target] = _serialize(state)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
-        return jsonify({
+        return {
             "dt":       now.isoformat(),
             "location": {"lat": lat, "lon": lon, "alt": alt},
             "bodies":   bodies,
-        })
+        }
 
     return app
 
 
-# Start the Flask development server
+# Start the ASGI server
 def run(host: str = "127.0.0.1", port: int = 5001) -> None:
     try:
-        app = create_app()
+        import uvicorn
+
         print(f"Atlas server running at http://{host}:{port}")
-        app.run(host=host, port=port)
+        uvicorn.run("atlas.serve:create_app", factory=True, host=host, port=port)
     except ImportError:
-        print("Flask is not installed. Run: pip install flask")
+        print("FastAPI/Uvicorn is not installed. Run: pip install fastapi uvicorn")

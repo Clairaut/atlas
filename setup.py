@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="atlas",
-    version="0.2.9",
+    version="0.3.0",
     description="A SwissEph interface for visualizing astrological/astronomical data.",
     author="clairaut",
     package_dir={"": "src"},
@@ -10,6 +10,8 @@ setup(
     package_data={"atlas": ["view/shaders/*.vert", "view/shaders/*.frag", "data/*.dat", "data/*.npy"]},
     install_requires=[
         "pyswisseph",
+        "fastapi",
+        "uvicorn",
         "rich",
         "timezonefinder",
         "pytz",
