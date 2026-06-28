@@ -1,4 +1,6 @@
 pyswisseph
+fastapi
+uvicorn
 rich
 timezonefinder
 pytz

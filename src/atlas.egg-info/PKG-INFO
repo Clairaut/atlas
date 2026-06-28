@@ -1,10 +1,12 @@
 Metadata-Version: 2.4
 Name: atlas
-Version: 0.2.7
+Version: 0.3.0
 Summary: A SwissEph interface for visualizing astrological/astronomical data.
 Author: clairaut
 Requires-Python: >=3.9
 Requires-Dist: pyswisseph
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
 Requires-Dist: rich
 Requires-Dist: timezonefinder
 Requires-Dist: pytz

@@ -20,13 +20,10 @@ src/atlas/models/aspect.py
 src/atlas/models/celestial_state.py
 src/atlas/models/event.py
 src/atlas/models/location.py
-src/atlas/static/fonts/NotoSans-Regular.ttf
-src/atlas/static/fonts/NotoSansSymbols-Regular.ttf
 src/atlas/utils/__init__.py
 src/atlas/utils/chrono.py
 src/atlas/utils/config.py
 src/atlas/utils/constellation.py
-src/atlas/utils/logger.py
 src/atlas/view/__init__.py
 src/atlas/view/base.py
 src/atlas/view/chart.py

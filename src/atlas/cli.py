@@ -352,7 +352,7 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
             phase_tuple = None
             phase_str   = None
         phase_angle = getattr(state, "phase_angle", None)
-        waxing      = "wax." if getattr(state, "waxing", None) is True else "wan."
+        waxing      = "wax." if getattr(state, "phase_waxing", None) is True else "wan."
         if phase_str is not None and phase_angle is not None:
             has_phase = True
 

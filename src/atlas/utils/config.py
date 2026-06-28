@@ -7,9 +7,6 @@ from pathlib import Path
 # External libraries
 import tomllib
 
-logger = logging.getLogger(__name__)
-
-
 DEFAULT_CONFIG = """# Atlas configuration
 [ephemeris]
 path = ""
