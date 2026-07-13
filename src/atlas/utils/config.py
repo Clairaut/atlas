@@ -20,12 +20,17 @@ lat = 0.00
 lon = 0.00
 alt = 4.00
 
+# Pango markup sizes used by --pango output (see `atlas observe --pango`)
+[display]
+glyph_size = "16pt"
+detail_size = "11pt"
+
 [celestials]
-sun     = { glyph = "☉", name = "Sun",     id = 0,  type = "star"      }
-moon    = { glyph = "☽", name = "Moon",    id = 1,  type = "satellite" }
-mercury = { glyph = "☿", name = "Mercury", id = 2,  type = "inferior"  }
-venus   = { glyph = "♀", name = "Venus",   id = 3,  type = "inferior"  }
-mars    = { glyph = "♂", name = "Mars",    id = 4,  type = "superior"  }
+sun     = { glyph = "☉", name = "Sun",     id = 0,  type = "star",      color = "#f6ffc1" }
+moon    = { glyph = "☽", name = "Moon",    id = 1,  type = "satellite", color = "#cccccc" }
+mercury = { glyph = "☿", name = "Mercury", id = 2,  type = "inferior",  color = "#b4cdf3" }
+venus   = { glyph = "♀", name = "Venus",   id = 3,  type = "inferior",  color = "#ffc9e9" }
+mars    = { glyph = "♂", name = "Mars",    id = 4,  type = "superior",  color = "#ff5555" }
 jupiter = { glyph = "♃", name = "Jupiter", id = 5,  type = "superior"  }
 saturn  = { glyph = "♄", name = "Saturn",  id = 6,  type = "superior"  }
 uranus  = { glyph = "♅", name = "Uranus",  id = 7,  type = "superior"  }

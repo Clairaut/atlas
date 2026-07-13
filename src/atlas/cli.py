@@ -36,6 +36,10 @@ alt: float = config.get("location", {}).get("alt", 0)
 default_image_path: Optional[str] = config.get("output", {}).get("image") or None
 default_video_path: Optional[str] = config.get("output", {}).get("video") or None
 
+# Pango font sizes for --pango output
+glyph_size:  str = config.get("display", {}).get("glyph_size", "16pt")
+detail_size: str = config.get("display", {}).get("detail_size", "11pt")
+
 # Create default location object
 default_location_str: str = f"({lat}, {lon}, {alt})"
 default_location = Location(lat=lat, lon=lon, alt=alt)
@@ -96,6 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
     observe_parser.add_argument("-a", "--attributes",help="extra attributes: phase, aspects, transits, elongation, mag",  choices=["phase", "aspects", "transits", "elongation", "mag"], nargs="*", default=None)
     observe_parser.add_argument("-s", "--system",    help="coordinate systems: ecliptic, equatorial, horizontal",        nargs="*", default=["ecliptic"])
     observe_parser.add_argument("-c", "--concise",   help="compact output",                                              action="store_true")
+    observe_parser.add_argument("-p", "--pango",     help="wrap concise output in Pango markup, colored per [celestials].color", action="store_true")
 
     # chart subparser
     chart_parser = subparsers.add_parser(
@@ -309,7 +314,7 @@ def _fmt_ra(ra_deg: float) -> str:
 
 
 # Display a single-moment list of celestial states
-def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None):
+def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False):
     attrs          = attributes or []
     # Detect which coordinate systems are populated
     has_ecliptic   = any(s.lon is not None for s in states)
@@ -361,10 +366,11 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
                      ra_str, dec_str, constellation,
                      alt_str, az_str,
                      mag_str,
-                     phase_str, phase_angle, waxing))
+                     phase_str, phase_angle, waxing,
+                     getattr(state, "color", None)))
 
     if concise:
-        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing) in rows:
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing, color) in rows:
             parts = [f"{g}"]
             if has_ecliptic:   parts.append(f"{sg} {orb}")
             if has_equatorial: parts.append(f"{ra} {dec}")
@@ -373,7 +379,13 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
             if phase_str and phase_angle is not None:
                 pg = phase_str.split(" ", 1)[0]
                 parts.append(f"{pg} {phase_angle:.2f}° {waxing}")
-            print("  ".join(parts))
+            if pango:
+                color_attr = f' color="{color}"' if color else ""
+                glyph_span  = f'<span font_size="{glyph_size}"{color_attr}>{parts[0]}</span>'
+                detail_span = f'<span font_size="{detail_size}"{color_attr}>{" ".join(parts[1:])}</span>' if len(parts) > 1 else ""
+                print(f"{glyph_span} {detail_span}".rstrip())
+            else:
+                print("  ".join(parts))
     else:
         table = Table(show_header=True, title=None, box=box.SIMPLE, show_edge=False, pad_edge=False)
         table.add_column(" ",    no_wrap=True, min_width=2)
@@ -398,7 +410,7 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
             table.add_column("Phase Angle", no_wrap=True, justify="right")
             table.add_column("Waxing",      no_wrap=True)
 
-        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing) in rows:
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing, color) in rows:
             cells: list[str] = [g, name]
             if has_ecliptic:
                 cells += [sg, sn, orb, retro]
@@ -629,7 +641,7 @@ def _handle_observe(args):
                 )
                 states.append(state)
 
-            _display_celestial_states(states, concise=args.concise, attributes=attributes)
+            _display_celestial_states(states, concise=args.concise, attributes=attributes, pango=args.pango)
 
             if "aspects" in attributes:
                 print()

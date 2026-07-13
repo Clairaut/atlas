@@ -67,6 +67,8 @@ class CelestialState:
 	dt: datetime
 	location: "Location"
 
+	color: Optional[str] = field(default=None)  # hex, from [celestials].color config
+
 	# Positional properties
 	dist: Optional[float] = field(init=False, default=None)			# Base (AU)
 	ddist: Optional[float] = field(init=False, default=None)

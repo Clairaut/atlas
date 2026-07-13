@@ -36,6 +36,7 @@ class Atlas:
             glyph = target_info["glyph"],
             name  = target_info["name"],
             type  = target_info.get("type", "superior"),
+            color = target_info.get("color"),
             dt       = self._observatory.dt,          # type: ignore[arg-type]
             location = self._observatory._location,   # type: ignore[arg-type]
         )
