@@ -101,6 +101,8 @@ def _build_parser() -> argparse.ArgumentParser:
     observe_parser.add_argument("-s", "--system",    help="coordinate systems: ecliptic, equatorial, horizontal",        nargs="*", default=["ecliptic"])
     observe_parser.add_argument("-c", "--concise",   help="compact output",                                              action="store_true")
     observe_parser.add_argument("-p", "--pango",     help="wrap concise output in Pango markup, colored per [celestials].color", action="store_true")
+    observe_parser.add_argument("--glyph-size",      help="override [display].glyph_size for this call e.g. 20pt",       nargs="?", default=None)
+    observe_parser.add_argument("--detail-size",     help="override [display].detail_size for this call e.g. 14pt",      nargs="?", default=None)
 
     # chart subparser
     chart_parser = subparsers.add_parser(
@@ -314,7 +316,7 @@ def _fmt_ra(ra_deg: float) -> str:
 
 
 # Display a single-moment list of celestial states
-def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False):
+def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False, glyph_size_override: Optional[str] = None, detail_size_override: Optional[str] = None):
     attrs          = attributes or []
     # Detect which coordinate systems are populated
     has_ecliptic   = any(s.lon is not None for s in states)
@@ -381,8 +383,10 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
                 parts.append(f"{pg} {phase_angle:.2f}° {waxing}")
             if pango:
                 color_attr = f' color="{color}"' if color else ""
-                glyph_span  = f'<span font_size="{glyph_size}"{color_attr}>{parts[0]}</span>'
-                detail_span = f'<span font_size="{detail_size}"{color_attr}>{" ".join(parts[1:])}</span>' if len(parts) > 1 else ""
+                gsize = glyph_size_override or glyph_size
+                dsize = detail_size_override or detail_size
+                glyph_span  = f'<span font_size="{gsize}"{color_attr}>{parts[0]}</span>'
+                detail_span = f'<span font_size="{dsize}"{color_attr}>{" ".join(parts[1:])}</span>' if len(parts) > 1 else ""
                 print(f"{glyph_span} {detail_span}".rstrip())
             else:
                 print("  ".join(parts))
@@ -641,7 +645,7 @@ def _handle_observe(args):
                 )
                 states.append(state)
 
-            _display_celestial_states(states, concise=args.concise, attributes=attributes, pango=args.pango)
+            _display_celestial_states(states, concise=args.concise, attributes=attributes, pango=args.pango, glyph_size_override=args.glyph_size, detail_size_override=args.detail_size)
 
             if "aspects" in attributes:
                 print()
