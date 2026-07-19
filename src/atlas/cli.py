@@ -7,9 +7,8 @@ import traceback
 
 # Internal Modules
 from atlas.core.atlas import Atlas
-from atlas.core.observatory import Observatory
 from atlas.models.location import Location
-from atlas.models.celestial_state import CelestialState
+from atlas.models.celestial import Celestial
 from atlas.models.aspect import ASPECT_GLYPHS, build_aspects, build_transit_aspects
 from atlas.models.event import Event
 from atlas.utils.config import load_config
@@ -76,9 +75,8 @@ def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
 
 # Initialize the CLI components
 def _initialize_cli(verbose: bool = False) -> Atlas:
-    ephe_path   = config.get("ephemeris", {}).get("path", "")
-    observatory = Observatory(ephe_path=ephe_path, dt=convert_to_utc(datetime.now(), default_location), location=default_location, verbose=verbose)
-    atlas       = Atlas(observatory=observatory, verbose=verbose)
+    ephe_path = config.get("ephemeris", {}).get("path", "")
+    atlas     = Atlas(ephe_path=ephe_path, dt=convert_to_utc(datetime.now(), default_location), location=default_location, verbose=verbose)
 
     if verbose:
         logging.info("CLI components initialized")
@@ -170,7 +168,7 @@ def _fmt_ra(ra_deg: float) -> str:
 
 
 # Display a single-moment list of celestial states
-def _display_celestial_states(states: list["CelestialState"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False, glyph_size_override: Optional[str] = None, detail_size_override: Optional[str] = None):
+def _display_celestial_states(states: list["Celestial"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False, glyph_size_override: Optional[str] = None, detail_size_override: Optional[str] = None):
     attrs          = attributes or []
     # Detect which coordinate systems are populated
     has_ecliptic   = any(s.lon is not None for s in states)
@@ -288,7 +286,7 @@ def _display_celestial_states(states: list["CelestialState"], concise: bool = Fa
 
 
 # Display aspects between a list of states at a single moment
-def _display_aspects(states: list["CelestialState"]):
+def _display_aspects(states: list["Celestial"]):
     global cli_atlas
     if cli_atlas is None:
         cli_atlas = _initialize_cli()
@@ -312,7 +310,7 @@ def _display_aspects(states: list["CelestialState"]):
 
 
 # Display a time-series trace for multiple targets
-def _display_trace(traces: list[list["CelestialState"]], targets: list[str], concise: bool = False):
+def _display_trace(traces: list[list["Celestial"]], targets: list[str], concise: bool = False):
     # traces[i] = list of states (one per target) at timestep i
     if not traces:
         return
@@ -467,7 +465,7 @@ def observe(
         if range_from:
             # Time-series trace mode — one trace per target, zipped by timestep
             traces_by_target = [
-                cli_atlas.build_celestial_trace(
+                cli_atlas.track(
                     target   = target,
                     start_dt = range_from,
                     end_dt   = range_to,
@@ -490,9 +488,9 @@ def observe(
             if "mag" in attrs:
                 properties.append("magnitude")
 
-            states: list[CelestialState] = []
+            states: list[Celestial] = []
             for target in targets:
-                state = cli_atlas.build_celestial_state(
+                state = cli_atlas.locate(
                     dt         = moment,
                     location   = loc,
                     target     = target,
@@ -556,7 +554,7 @@ def _handle_chart(targets, moment, loc, zodiac, save, title):
     try:
         celestials = []
         for target in targets:
-            state = cli_atlas.build_celestial_state(
+            state = cli_atlas.locate(
                 dt         = moment,
                 location   = loc,
                 target     = target,
@@ -566,7 +564,7 @@ def _handle_chart(targets, moment, loc, zodiac, save, title):
             )
             celestials.append(state)
 
-        cusps    = cli_atlas.build_houses(dt=moment, location=loc, zodiac=zodiac)
+        cusps    = cli_atlas.erect(dt=moment, location=loc, zodiac=zodiac)
         aspects  = build_aspects(celestials)
         chart_title = title or moment.strftime("%Y-%m-%d  %H:%M")
         RadixChart.configure(cusps=cusps, celestials=celestials, aspects=aspects, title=chart_title, save_path=_resolve_save_path(save or default_image_path, ".png"))
@@ -590,17 +588,17 @@ def _handle_transit_chart(targets, natal_dt, transit_dt, loc, zodiac, save, titl
         natal_celestials   = []
         transit_celestials = []
         for target in targets:
-            natal_celestials.append(cli_atlas.build_celestial_state(
+            natal_celestials.append(cli_atlas.locate(
                 dt=natal_dt, location=loc, target=target,
                 zodiac=zodiac, properties=["position"], systems=["ecliptic"],
             ))
-            transit_celestials.append(cli_atlas.build_celestial_state(
+            transit_celestials.append(cli_atlas.locate(
                 dt=transit_dt, location=loc, target=target,
                 zodiac=zodiac, properties=["position"], systems=["ecliptic"],
             ))
 
-        natal_cusps      = cli_atlas.build_houses(dt=natal_dt,   location=loc, zodiac=zodiac)
-        transit_cusps    = cli_atlas.build_houses(dt=transit_dt, location=loc, zodiac=zodiac)
+        natal_cusps      = cli_atlas.erect(dt=natal_dt,   location=loc, zodiac=zodiac)
+        transit_cusps    = cli_atlas.erect(dt=transit_dt, location=loc, zodiac=zodiac)
         transit_aspects  = build_transit_aspects(natal_celestials, transit_celestials)
         chart_title = title or f"{natal_dt.strftime('%Y-%m-%d')} → {transit_dt.strftime('%Y-%m-%d')}"
 
@@ -736,7 +734,7 @@ def seek(
         event_details = detail or None
 
         if has_range:
-            events = cli_atlas.build_events(
+            events = cli_atlas.transit(
                 targets         = scan_targets,
                 start_dt        = convert_to_utc(range_from, loc),
                 end_dt          = convert_to_utc(range_to, loc),
@@ -746,7 +744,7 @@ def seek(
                 event_details   = event_details,
             )
         else:
-            events = cli_atlas.build_events(
+            events = cli_atlas.transit(
                 targets         = scan_targets,
                 start_dt        = moment,
                 end_dt          = moment + timedelta(days=365),
@@ -788,10 +786,10 @@ def dome(
 
     try:
         # Fetch planets with both ecliptic and horizontal systems for the panel
-        planets: list[CelestialState] = []
+        planets: list[Celestial] = []
         for target in scan_targets:
             try:
-                state = cli_atlas.build_celestial_state(
+                state = cli_atlas.locate(
                     dt         = moment,
                     location   = loc,
                     target     = target,
@@ -806,8 +804,8 @@ def dome(
         # Closure: called by dome on click to fetch a full state for a named body
         atlas = cli_atlas
 
-        def fetch_fn(name: str) -> "CelestialState":
-            return atlas.build_celestial_state(
+        def fetch_fn(name: str) -> "Celestial":
+            return atlas.locate(
                 dt         = moment,
                 location   = loc,
                 target     = name,
@@ -896,7 +894,7 @@ def journal(
         entries = []
         for target in default_targets:
             try:
-                state = cli_atlas.build_celestial_state(
+                state = cli_atlas.locate(
                     dt         = moment,
                     location   = default_location,
                     target     = target,
@@ -921,7 +919,7 @@ def journal(
         console.print(f"Appended to [bold]{path}[/bold]")
 
     if mode in ("digest", "both"):
-        events = cli_atlas.build_events(
+        events = cli_atlas.transit(
             targets     = default_targets,
             start_dt    = moment,
             end_dt      = moment + timedelta(hours=journal_window_hours),

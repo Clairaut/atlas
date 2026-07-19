@@ -426,7 +426,7 @@ class LiveRadixChart(RadixChart):
         celestials = []
         for target in self._targets:
             try:
-                state = self._atlas.build_celestial_state(
+                state = self._atlas.locate(
                     dt         = now,
                     location   = self._location,
                     target     = target,
@@ -438,7 +438,7 @@ class LiveRadixChart(RadixChart):
             except Exception:
                 pass
 
-        cusps = self._atlas.build_houses(dt=now, location=self._location, zodiac=self._zodiac)
+        cusps = self._atlas.erect(dt=now, location=self._location, zodiac=self._zodiac)
         self._prev_cusps = list(getattr(self, '_cusps', []))
         self._cusps      = cusps
         self._celestials = celestials
@@ -551,14 +551,14 @@ class PlaybackChart(LiveRadixChart):
         celestials = []
         for target in self._targets:
             try:
-                state = self._atlas.build_celestial_state(
+                state = self._atlas.locate(
                     dt=dt, location=self._location, target=target,
                     zodiac=self._zodiac, properties=["position"], systems=["ecliptic"],
                 )
                 celestials.append(state)
             except Exception:
                 pass
-        cusps = self._atlas.build_houses(dt=dt, location=self._location, zodiac=self._zodiac)
+        cusps = self._atlas.erect(dt=dt, location=self._location, zodiac=self._zodiac)
         self._prev_cusps = list(self._cusps)
         self._cusps      = cusps
         self._celestials = celestials

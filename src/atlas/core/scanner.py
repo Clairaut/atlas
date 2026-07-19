@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timedelta
 
 # Internal Modules
-from atlas.models.celestial_state import CelestialState, PHASE_DEFS, ELONGATION_EVENTS
+from atlas.models.celestial import Celestial, PHASE_DEFS, ELONGATION_EVENTS
 from atlas.models.aspect import ASPECT_DEFS, ASPECT_GLYPHS, angular_diff
 from atlas.models.event import Event
 
@@ -37,7 +37,7 @@ class Scanner:
             return [e for e in evts if event_details is None or any(d.lower() in e.detail.lower() for d in event_details)]
 
         events:          list[Event] = []
-        prev_states:     Optional[list[CelestialState]] = None
+        prev_states:     Optional[list[Celestial]] = None
         pending_aspects: dict = {}
 
         pos_systems = ["ecliptic", "equatorial", "horizontal"] if "diurnal" in event_types else ["ecliptic"]
@@ -96,7 +96,7 @@ class Scanner:
     # Detect pairwise aspect crossings, orb entries, and orb exits between prev and current timestep
     def _scan_aspects(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
         pending: dict,
     ) -> tuple[list[Event], dict]:
@@ -163,10 +163,10 @@ class Scanner:
     # Detect sign ingress crossings for each body
     def _scan_ingresses(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
-        from atlas.models.celestial_state import SIGNS
+        from atlas.models.celestial import SIGNS
         events: list[Event] = []
         for k, (state, prev) in enumerate(zip(states, prev_states)):
             if state.lon is None or prev.lon is None:
@@ -189,7 +189,7 @@ class Scanner:
     # Detect retrograde / direct station crossings for each body
     def _scan_stations(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
         events: list[Event] = []
@@ -213,7 +213,7 @@ class Scanner:
     # Detect phase crossings for all bodies using SwissEph phase data
     def _scan_phases(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
         events: list[Event] = []
@@ -247,7 +247,7 @@ class Scanner:
     # Detect synodic crossing events for superior planets
     def _scan_elongation(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
         events: list[Event] = []
@@ -271,7 +271,7 @@ class Scanner:
     # Detect daily angular crossings: rising, setting, culmination, anti-culmination
     def _scan_diurnal(
         self,
-        states: list[CelestialState], prev_states: list[CelestialState],
+        states: list[Celestial], prev_states: list[Celestial],
         targets: list[str], prev_dt: datetime, current: datetime,
     ) -> list[Event]:
         events: list[Event] = []

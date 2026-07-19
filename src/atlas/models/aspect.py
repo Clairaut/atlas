@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 # Internal Modules
 if TYPE_CHECKING:
-    from atlas.models.celestial_state import CelestialState
+    from atlas.models.celestial import Celestial
 
 
 # Aspect angle definitions: (angle_deg, name, orb_limit)
@@ -29,8 +29,8 @@ ASPECT_GLYPHS: dict[str, str] = {
 @dataclass
 class Aspect:
     name:     str
-    body_one: "CelestialState"
-    body_two: "CelestialState"
+    body_one: "Celestial"
+    body_two: "Celestial"
     orb:      float
     glyph:    str = ""
 
@@ -42,7 +42,7 @@ def angular_diff(lon_a: float, lon_b: float) -> float:
 
 
 # Compute all aspects between a list of celestial states (pure geometry)
-def build_aspects(celestials: "list[CelestialState]") -> list[Aspect]:
+def build_aspects(celestials: "list[Celestial]") -> list[Aspect]:
     aspects: list[Aspect] = []
     for i in range(len(celestials)):
         for j in range(i + 1, len(celestials)):
@@ -59,7 +59,7 @@ def build_aspects(celestials: "list[CelestialState]") -> list[Aspect]:
 
 
 # Compute cross-chart aspects between natal and transit bodies
-def build_transit_aspects(natal: "list[CelestialState]", transit: "list[CelestialState]") -> list[Aspect]:
+def build_transit_aspects(natal: "list[Celestial]", transit: "list[Celestial]") -> list[Aspect]:
     aspects: list[Aspect] = []
     for a in natal:
         for b in transit:

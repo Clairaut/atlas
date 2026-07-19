@@ -16,7 +16,7 @@ from atlas.view.base import (
 )
 
 if TYPE_CHECKING:
-    from atlas.models.celestial_state import CelestialState
+    from atlas.models.celestial import Celestial
     from atlas.models.location import Location
 
 # External Modules
@@ -166,7 +166,7 @@ class InfoPanel:
             self._tex.use()
             self._vao.render(moderngl.TRIANGLE_STRIP)
 
-    def show_state(self, state: "CelestialState", extra: Optional[dict] = None) -> None:
+    def show_state(self, state: "Celestial", extra: Optional[dict] = None) -> None:
         img  = Image.new("RGBA", (_PANEL_W, _PANEL_H), (10, 11, 20, 225))
         draw = ImageDraw.Draw(img)
         extra = extra or {}
@@ -482,7 +482,7 @@ class DomeView(BaseGLWindow):
         self._upload_glyphs()
 
     def _build_ecliptic(self) -> None:
-        from atlas.models.celestial_state import SIGNS
+        from atlas.models.celestial import SIGNS
         T      = (self._jd - 2451545.0) / 36525.0
         eps    = math.radians(23.439291111 - 0.013004167 * T)
         lons   = np.arange(0, 361, 1.0)

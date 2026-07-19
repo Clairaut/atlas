@@ -7,23 +7,30 @@ import logging
 
 # Internal Modules
 from atlas.utils.config import load_config
-from atlas.models.celestial_state import CelestialState
+from atlas.core.observatory import Observatory
+from atlas.models.celestial import Celestial
 from atlas.models.event import Event
 
 if TYPE_CHECKING:
-    from atlas.core.observatory import Observatory
     from atlas.models.location import Location
 
 
 class Atlas:
-    def __init__(self, observatory: "Observatory", verbose: bool = False):
-        self._observatory = observatory
+    def __init__(
+        self,
+        ephe_path: str = "",
+        dt:        Optional[datetime] = None,
+        location:  Optional["Location"] = None,
+        hsys:      str = "P",
+        verbose:   bool = False,
+    ):
+        self._observatory = Observatory(ephe_path=ephe_path, dt=dt, location=location, hsys=hsys, verbose=verbose)
         self._config      = load_config()
         self._verbose     = verbose
 
 
     # Reads dt and location from observatory; caller must configure observatory first
-    def _sample(self, target: str, properties: list[str], systems: list[str]) -> CelestialState:
+    def _sample(self, target: str, properties: list[str], systems: list[str]) -> Celestial:
         target_info = self._config["celestials"].get(target.lower()) or {
             "id":    target,
             "glyph": "✦",
@@ -31,7 +38,7 @@ class Atlas:
             "type": "star",
         }
 
-        c = CelestialState(
+        c = Celestial(
             id    = target_info["id"],
             glyph = target_info["glyph"],
             name  = target_info["name"],
@@ -74,7 +81,7 @@ class Atlas:
 
 
     # Build states for multiple targets
-    def build_celestial_states(
+    def survey(
         self,
         targets:    list[str],
         dt:         datetime,
@@ -83,12 +90,12 @@ class Atlas:
         ayanamsa:   Optional[str] = None,
         properties: list[str] = ["position", "phenomenon"],
         systems:    list[str] = ["ecliptic"],
-    ) -> list[CelestialState]:
+    ) -> list[Celestial]:
         self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
         return [self._sample(target=t, properties=properties, systems=systems) for t in targets]
 
     # Build a single body state
-    def build_celestial_state(
+    def locate(
         self,
         dt:         datetime,
         location:   "Location",
@@ -97,12 +104,12 @@ class Atlas:
         ayanamsa:   Optional[str] = None,
         properties: list[str] = ["position", "phenomenon"],
         systems:    list[str] = ["ecliptic"],
-    ) -> CelestialState:
+    ) -> Celestial:
         self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
         return self._sample(target=target, properties=properties, systems=systems)
 
     # Return a time-ordered list of states for a single body over a date range
-    def build_celestial_trace(
+    def track(
         self,
         target:   str,
         start_dt: datetime,
@@ -111,8 +118,8 @@ class Atlas:
         location: "Location",
         zodiac:   str = "tropical",
         systems:  list[str] = ["ecliptic"],
-    ) -> list[CelestialState]:
-        trace: list[CelestialState] = []
+    ) -> list[Celestial]:
+        trace: list[Celestial] = []
         self._observatory.set(dt=start_dt, location=location).align(zodiac)
         while self._observatory.dt is not None and self._observatory.dt <= end_dt:
             trace.append(self._sample(target, ["position"], systems))
@@ -120,7 +127,7 @@ class Atlas:
         return trace
 
     # Cast the 12 house cusps for a given dt and location
-    def build_houses(
+    def erect(
         self,
         dt:       datetime,
         location: "Location",
@@ -132,7 +139,7 @@ class Atlas:
         return list(cusps[1:13] if len(cusps) == 13 else cusps[:12])
 
     # Detect transit events over a date range
-    def build_events(
+    def transit(
         self,
         targets:       list[str],
         start_dt:      datetime,
