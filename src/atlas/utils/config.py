@@ -25,6 +25,11 @@ alt = 4.00
 glyph_size = "16pt"
 detail_size = "11pt"
 
+# Used by `atlas journal`
+[journal]
+dir = "~/documents/journal"
+window_hours = 24
+
 [celestials]
 sun     = { glyph = "☉", name = "Sun",     id = 0,  type = "star",      color = "#f6ffc1" }
 moon    = { glyph = "☽", name = "Moon",    id = 1,  type = "satellite", color = "#cccccc" }

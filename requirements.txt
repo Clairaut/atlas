@@ -2,6 +2,7 @@ pyswisseph
 fastapi
 uvicorn
 rich
+typer>=0.12
 timezonefinder
 pytz
 moderngl

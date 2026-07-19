@@ -1,5 +1,5 @@
 README.md
-setup.py
+pyproject.toml
 src/atlas/__init__.py
 src/atlas/cli.py
 src/atlas/serve.py
