@@ -152,6 +152,15 @@ class Celestial:
 			return None
 		return self.elong if self.elong_waxing else 360.0 - self.elong
 
+	@property
+	def elong_label(self) -> Optional[tuple[str, str]]:
+		# Nearest quadrature stage (conjunction/quadrature/opposition), via elong_cycle
+		cycle = self.elong_cycle
+		if cycle is None:
+			return None
+		_, name_tpl, glyph = min(ELONGATION_EVENTS, key=lambda p: abs(((cycle - p[0] + 180) % 360) - 180))
+		return (name_tpl.format(name=self.name.capitalize()), glyph)
+
 
 	@property
 	def constellation(self) -> Optional[str]:

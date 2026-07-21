@@ -171,11 +171,14 @@ def _fmt_ra(ra_deg: float) -> str:
 def _display_celestial_states(states: list["Celestial"], concise: bool = False, attributes: Optional[list[str]] = None, pango: bool = False, glyph_size_override: Optional[str] = None, detail_size_override: Optional[str] = None):
     attrs          = attributes or []
     # Detect which coordinate systems are populated
-    has_ecliptic   = any(s.lon is not None for s in states)
+    # Zodiac (ecliptic) is on by default (no -a given) but, once -a is used to
+    # narrow the view, only shows if explicitly requested via -a zodiac
+    has_ecliptic   = any(s.lon is not None for s in states) and (not attrs or "zodiac" in attrs)
     has_equatorial = any(s.ra  is not None for s in states)
     has_horizontal = any(s.alt is not None for s in states)
     # Mag: always show for stars; show for planets only if -a mag requested
     has_mag        = any(s.app_mag is not None and (s.type == "star" or "mag" in attrs) for s in states)
+    has_elongation = "elongation" in attrs and any(s.elong is not None for s in states)
     has_phase      = False
 
     rows = []
@@ -203,6 +206,15 @@ def _display_celestial_states(states: list["Celestial"], concise: bool = False, 
         # Magnitude
         mag_str = f"{state.app_mag:.2f}" if state.app_mag is not None else ""
 
+        # Elongation
+        elong_str = f"{state.elong:.2f}°" if state.elong is not None else ""
+        try:
+            elong_label_tuple = state.elong_label
+            elong_label_str   = f"{elong_label_tuple[1]} {elong_label_tuple[0]}" if elong_label_tuple else None
+        except Exception:
+            elong_label_str = None
+        elong_waxing = "wax." if getattr(state, "elong_waxing", None) is True else "wan."
+
         # Phase
         try:
             phase_tuple = state.phase
@@ -212,25 +224,28 @@ def _display_celestial_states(states: list["Celestial"], concise: bool = False, 
             phase_str   = None
         phase_angle = getattr(state, "phase_angle", None)
         waxing      = "wax." if getattr(state, "phase_waxing", None) is True else "wan."
-        if phase_str is not None and phase_angle is not None:
+        if "phase" in attrs and phase_str is not None and phase_angle is not None:
             has_phase = True
 
         rows.append((glyph_str, name_str, retrograde,
                      sign_glyph, sign_name, orb_str,
                      ra_str, dec_str, constellation,
                      alt_str, az_str,
-                     mag_str,
+                     mag_str, elong_str, elong_label_str, elong_waxing,
                      phase_str, phase_angle, waxing,
                      getattr(state, "color", None)))
 
     if concise:
-        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing, color) in rows:
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, elong, elong_label_str, elong_waxing, phase_str, phase_angle, waxing, color) in rows:
             parts = [f"{g}"]
             if has_ecliptic:   parts.append(f"{sg} {orb}")
             if has_equatorial: parts.append(f"{ra} {dec}")
             if has_horizontal: parts.append(f"alt {alt}  az {az}")
             if has_mag and mag: parts.append(f"m{mag}")
-            if phase_str and phase_angle is not None:
+            if has_elongation and elong:
+                eg = elong_label_str.split(" ", 1)[0] if elong_label_str else ""
+                parts.append(f"{eg} {elong} {elong_waxing}".strip())
+            if "phase" in attrs and phase_str and phase_angle is not None:
                 pg = phase_str.split(" ", 1)[0]
                 parts.append(f"{pg} {phase_angle:.2f}° {waxing}")
             if pango:
@@ -260,13 +275,18 @@ def _display_celestial_states(states: list["Celestial"], concise: bool = False, 
             table.add_column("Az",  no_wrap=True, justify="right")
         if has_mag:
             table.add_column("Mag", no_wrap=True, justify="right")
+        if has_elongation:
+            table.add_column(" ",              no_wrap=True, min_width=2)
+            table.add_column("Elongation",      no_wrap=True, justify="right")
+            table.add_column("Elong. Phase",    no_wrap=True)
+            table.add_column("Elong. Waxing",   no_wrap=True)
         if has_phase:
             table.add_column(" ",           no_wrap=True, min_width=2)
             table.add_column("Phase",       no_wrap=True)
             table.add_column("Phase Angle", no_wrap=True, justify="right")
             table.add_column("Waxing",      no_wrap=True)
 
-        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, phase_str, phase_angle, waxing, color) in rows:
+        for (g, name, retro, sg, sn, orb, ra, dec, con, alt, az, mag, elong, elong_label_str, elong_waxing, phase_str, phase_angle, waxing, color) in rows:
             cells: list[str] = [g, name]
             if has_ecliptic:
                 cells += [sg, sn, orb, retro]
@@ -276,6 +296,10 @@ def _display_celestial_states(states: list["Celestial"], concise: bool = False, 
                 cells += [alt, az]
             if has_mag:
                 cells.append(mag)
+            if has_elongation:
+                eg = elong_label_str.split(" ", 1)[0] if elong_label_str else ""
+                en = elong_label_str.split(" ", 1)[1] if elong_label_str and " " in elong_label_str else ""
+                cells += [eg, elong, en, elong_waxing]
             if has_phase:
                 pg = phase_str.split(" ", 1)[0] if phase_str else ""
                 pn = phase_str.split(" ", 1)[1] if phase_str and " " in phase_str else ""
@@ -439,7 +463,7 @@ def observe(
     step: str = typer.Option("1d", "--step", help="time step for range queries e.g. 1d, 6h, 30m"),
     location: str = typer.Option(default_location_str, "-l", "--location", help="location '(lat,lon,alt)'"),
     zodiac: str = typer.Option("tropical", "-z", "--zodiac", help="zodiac type", case_sensitive=False),
-    attributes: Optional[List[str]] = typer.Option(None, "-a", "--attributes", help="extra attributes: phase, aspects, transits, elongation, mag"),
+    attributes: Optional[List[str]] = typer.Option(None, "-a", "--attributes", help="extra attributes: phase, aspects, transits, elongation, mag, zodiac"),
     system: List[str] = typer.Option(["ecliptic"], "-s", "--system", help="coordinate systems: ecliptic, equatorial, horizontal"),
     concise: bool = typer.Option(False, "-c", "--concise", help="compact output"),
     pango: bool = typer.Option(False, "-p", "--pango", help="wrap concise output in Pango markup, colored per [celestials].color"),
@@ -483,7 +507,7 @@ def observe(
         else:
             # Single-moment observation
             properties: list[str] = ["position"]
-            if "phase" in attrs or "mag" in attrs:
+            if "phase" in attrs or "mag" in attrs or "elongation" in attrs:
                 properties.append("phenomenon")
             if "mag" in attrs:
                 properties.append("magnitude")
