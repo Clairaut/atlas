@@ -48,8 +48,11 @@ journal_window_hours: int = config.get("journal", {}).get("window_hours", 24)
 default_location_str: str = f"({lat}, {lon}, {alt})"
 default_location = Location(lat=lat, lon=lon, alt=alt)
 
-# Default chart/journal targets: every configured celestial that isn't a star
+# Default journal targets: every configured celestial that isn't a star
 default_targets: list = [k for k, v in config.get("celestials", {}).items() if v.get("type") != "star"]
+
+# Default chart targets: same, but keep the Sun — drop only other stars (e.g. Sirius)
+default_chart_targets: list = [k for k, v in config.get("celestials", {}).items() if v.get("type") != "star" or k == "sun"]
 
 cli_atlas = None
 console = Console()
@@ -62,6 +65,24 @@ app = typer.Typer(
 )
 
 
+# Print installed atlas version and exit
+def _version_callback(value: bool) -> None:
+    if value:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            print(f"atlas {version('atlas')}")
+        except PackageNotFoundError:
+            print("atlas (version unknown — not installed as a package)")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: Optional[bool] = typer.Option(None, "--version", "-v", callback=_version_callback, is_eager=True, help="show atlas version and exit"),
+) -> None:
+    pass
+
+
 # Resolve a save path: if it's a directory (no extension), append a timestamped filename
 def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
     if not base:
@@ -71,6 +92,16 @@ def _resolve_save_path(base: Optional[str], ext: str) -> Optional[str]:
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         return os.path.join(base, f"atlas_{stamp}{ext}")
     return base
+
+
+# Resolve --save: not given -> no save; --save "" -> configured [output] default; --save <path> -> that path.
+# Config output paths must never apply unless --save was actually given.
+def _resolve_save(save: Optional[str], config_default: Optional[str], ext: str) -> Optional[str]:
+    if save is None:
+        return None
+    if save == "":
+        return _resolve_save_path(config_default, ext)
+    return _resolve_save_path(save, ext)
 
 
 # Initialize the CLI components
@@ -539,14 +570,14 @@ def observe(
 
 @app.command()
 def chart(
-    targets: List[str] = typer.Argument(default_targets, help="celestial bodies to include"),
+    targets: List[str] = typer.Argument(default_chart_targets, help="celestial bodies to include"),
     at: Optional[str] = typer.Option(None, "--at", help="chart datetime 'YYYY-MM-DD [HH:MM[:SS]]'"),
     transit: Optional[str] = typer.Option(None, "--transit", help="transit datetime — triggers dual-ring transit chart"),
     from_dt: Optional[str] = typer.Option(None, "--from", help="playback start datetime"),
     to_dt: Optional[str] = typer.Option(None, "--to", help="playback end datetime (default: now)"),
     step: str = typer.Option("1d", "--step", help="playback time step e.g. 1d, 1h"),
     speed: float = typer.Option(1.0, "--speed", help="playback steps per second (default 1.0)"),
-    save: Optional[str] = typer.Option(None, "--save", help="save path — .png for static charts, .mp4 for playback"),
+    save: Optional[str] = typer.Option(None, "--save", help="save path — .png for static charts, .mp4 for playback; pass an empty string ('') to use the configured output-path default"),
     location: str = typer.Option(default_location_str, "-l", "--location", help="location '(lat,lon,alt)'"),
     zodiac: str = typer.Option("tropical", "-z", "--zodiac", help="zodiac type"),
     title: Optional[str] = typer.Option(None, "-T", "--title", help="chart title"),
@@ -591,7 +622,7 @@ def _handle_chart(targets, moment, loc, zodiac, save, title):
         cusps    = cli_atlas.erect(dt=moment, location=loc, zodiac=zodiac)
         aspects  = build_aspects(celestials)
         chart_title = title or moment.strftime("%Y-%m-%d  %H:%M")
-        RadixChart.configure(cusps=cusps, celestials=celestials, aspects=aspects, title=chart_title, save_path=_resolve_save_path(save or default_image_path, ".png"))
+        RadixChart.configure(cusps=cusps, celestials=celestials, aspects=aspects, title=chart_title, save_path=_resolve_save(save, default_image_path, ".png"))
         RadixChart.show()
 
     except ValueError as e:
@@ -630,7 +661,7 @@ def _handle_transit_chart(targets, natal_dt, transit_dt, loc, zodiac, save, titl
             cusps=natal_cusps, celestials=natal_celestials,
             transit_cusps=transit_cusps, transit_celestials=transit_celestials,
             transit_aspects=transit_aspects,
-            title=chart_title, save_path=_resolve_save_path(save or default_image_path, ".png"),
+            title=chart_title, save_path=_resolve_save(save, default_image_path, ".png"),
         )
         TransitChart.show()
 
@@ -658,7 +689,7 @@ def _handle_playback(targets, start_dt, end_dt, step_td, speed, loc, zodiac, sav
             end_dt     = end_dt,
             step       = step_td,
             speed      = speed,
-            save_path  = _resolve_save_path(save or default_video_path, ".mp4"),
+            save_path  = _resolve_save(save, default_video_path, ".mp4"),
         )
         PlaybackChart.show()
     except Exception:
@@ -673,7 +704,7 @@ def _handle_live(loc, zodiac):
     if cli_atlas is None:
         cli_atlas = _initialize_cli(verbose=False)
 
-    targets = list(config.get("celestials", {}).keys())
+    targets = list(default_chart_targets)
 
     try:
         LiveRadixChart.configure_live(
@@ -792,7 +823,7 @@ def dome(
     at: Optional[str] = typer.Option(None, "--at", help="observation datetime 'YYYY-MM-DD [HH:MM[:SS]]'"),
     mag: float = typer.Option(6.5, "--mag", help="magnitude cutoff for star display (default 6.5)"),
     brightness: float = typer.Option(1.0, "--brightness", help="star brightness multiplier 0.0–2.0 (default 1.0)"),
-    save: Optional[str] = typer.Option(None, "--save", help="save initial frame as PNG"),
+    save: Optional[str] = typer.Option(None, "--save", help="save initial frame as PNG; pass an empty string ('') to use the configured output-path default"),
     location: str = typer.Option(default_location_str, "-l", "--location", help="location '(lat,lon,alt)'"),
     zodiac: str = typer.Option("tropical", "-z", "--zodiac", help="zodiac type"),
     title: Optional[str] = typer.Option(None, "-T", "--title", help="window title"),
@@ -839,7 +870,7 @@ def dome(
             )
 
         dome_title = title or moment.strftime("%Y-%m-%d  %H:%M")
-        save_path  = _resolve_save_path(save or default_image_path, ".png")
+        save_path  = _resolve_save(save, default_image_path, ".png")
 
         DomeView.configure(
             dt         = moment,
