@@ -43,8 +43,8 @@ PHASE_DEFS: list[tuple[float, str, str]] = [
 # Phase display for superior planets — illumination-based, two states only
 # (illum_threshold, name_tpl, glyph) — first entry where phase_illuminated >= threshold wins
 SUPERIOR_PHASE_DEFS: list[tuple[float, str, str]] = [
-    (0.00, "Full {name}",    "🌕"),
-    (0.95, "Gibbous {name}", "🌔"),
+    (0.95, "Full {name}",    "🌕"),
+    (0.00, "Gibbous {name}", "🌔"),
 ]
 
 # Synodic crossing events for superior planets (elongation-based)
