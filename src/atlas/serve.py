@@ -118,7 +118,7 @@ def create_app() -> "FastAPI":
         lon: float = _lon,
         alt: float = _alt,
     ):
-        target_names: list[str] = [t.strip() for t in targets.split(",") if t.strip()] or _available_celestials
+        target_names: list[str] = [t.strip().lower() for t in targets.split(",") if t.strip()] or _available_celestials
         try:
             now = _parse_dt(at) if at else datetime.now(timezone.utc)
         except ValueError as e:
