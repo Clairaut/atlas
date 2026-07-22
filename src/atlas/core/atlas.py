@@ -1,7 +1,7 @@
 # atlas/src/core/atlas.py
 
 # Standard Modules
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from datetime import datetime, timedelta
 import logging
 
@@ -11,8 +11,7 @@ from atlas.core.observatory import Observatory
 from atlas.models.celestial import Celestial
 from atlas.models.event import Event
 
-if TYPE_CHECKING:
-    from atlas.models.location import Location
+Location = tuple[float, float, float]
 
 
 class Atlas:
@@ -20,13 +19,20 @@ class Atlas:
         self,
         ephe_path: str = "",
         dt:        Optional[datetime] = None,
-        location:  Optional["Location"] = None,
+        location:  Optional[Location] = None,
         hsys:      str = "P",
         verbose:   bool = False,
     ):
         self._observatory = Observatory(ephe_path=ephe_path, dt=dt, location=location, hsys=hsys, verbose=verbose)
         self._config      = load_config()
         self._verbose     = verbose
+
+    # Resolve an explicit location, falling back to the configured default
+    def _resolve_location(self, location: Optional[Location]) -> Location:
+        if location is not None:
+            return location
+        cfg = self._config.get("location", {})
+        return (cfg.get("lat", 0.0), cfg.get("lon", 0.0), cfg.get("alt", 0.0))
 
 
     # Reads dt and location from observatory; caller must configure observatory first
@@ -85,27 +91,27 @@ class Atlas:
         self,
         targets:    list[str],
         dt:         datetime,
-        location:   "Location",
+        location:   Optional[Location] = None,
         zodiac:     str = "tropical",
         ayanamsa:   Optional[str] = None,
         properties: list[str] = ["position", "phenomenon"],
         systems:    list[str] = ["ecliptic"],
     ) -> list[Celestial]:
-        self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
+        self._observatory.set(dt=dt, location=self._resolve_location(location)).align(zodiac=zodiac, aya=ayanamsa)
         return [self._sample(target=t, properties=properties, systems=systems) for t in targets]
 
     # Build a single body state
     def locate(
         self,
         dt:         datetime,
-        location:   "Location",
         target:     str,
+        location:   Optional[Location] = None,
         zodiac:     str = "tropical",
         ayanamsa:   Optional[str] = None,
         properties: list[str] = ["position", "phenomenon"],
         systems:    list[str] = ["ecliptic"],
     ) -> Celestial:
-        self._observatory.set(dt=dt, location=location).align(zodiac=zodiac, aya=ayanamsa)
+        self._observatory.set(dt=dt, location=self._resolve_location(location)).align(zodiac=zodiac, aya=ayanamsa)
         return self._sample(target=target, properties=properties, systems=systems)
 
     # Return a time-ordered list of states for a single body over a date range
@@ -114,13 +120,13 @@ class Atlas:
         target:   str,
         start_dt: datetime,
         end_dt:   datetime,
-        step:     timedelta,
-        location: "Location",
+        step:     timedelta = timedelta(days=1),
+        location: Optional[Location] = None,
         zodiac:   str = "tropical",
         systems:  list[str] = ["ecliptic"],
     ) -> list[Celestial]:
         trace: list[Celestial] = []
-        self._observatory.set(dt=start_dt, location=location).align(zodiac)
+        self._observatory.set(dt=start_dt, location=self._resolve_location(location)).align(zodiac)
         while self._observatory.dt is not None and self._observatory.dt <= end_dt:
             trace.append(self._sample(target, ["position"], systems))
             self._observatory.shift(t_delta=step)
@@ -130,11 +136,11 @@ class Atlas:
     def erect(
         self,
         dt:       datetime,
-        location: "Location",
+        location: Optional[Location] = None,
         zodiac:   str = "tropical",
         hsys:     str = "placidus",
     ) -> list[float]:
-        self._observatory.set(dt=dt, location=location).align(zodiac=zodiac).domify(hsys)
+        self._observatory.set(dt=dt, location=self._resolve_location(location)).align(zodiac=zodiac).domify(hsys)
         cusps, _ = self._observatory.cast()
         return list(cusps[1:13] if len(cusps) == 13 else cusps[:12])
 
@@ -144,7 +150,7 @@ class Atlas:
         targets:       list[str],
         start_dt:      datetime,
         end_dt:        datetime,
-        location:      "Location",
+        location:      Optional[Location] = None,
         zodiac:        str = "tropical",
         event_types:   list[str] = ["aspect", "ingress", "station", "phase", "elongation", "diurnal"],
         event_details: Optional[list[str]] = None,
@@ -153,7 +159,7 @@ class Atlas:
     ) -> list[Event]:
         from atlas.core.scanner import Scanner
         return Scanner(self).scan_events(
-            targets=targets, start_dt=start_dt, end_dt=end_dt, location=location,
+            targets=targets, start_dt=start_dt, end_dt=end_dt, location=self._resolve_location(location),
             zodiac=zodiac, event_types=event_types, event_details=event_details,
             step=step, limit=limit,
         )

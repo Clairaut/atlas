@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 # Internal Modules
 from atlas.core.atlas import Atlas
 from atlas.models.celestial import Celestial
-from atlas.models.location import Location
 from atlas.utils.config import load_config
 
 if TYPE_CHECKING:
@@ -53,7 +52,7 @@ def create_app() -> "FastAPI":
     _lon: float = cfg.get("location", {}).get("lon", 0)
     _alt: float = cfg.get("location", {}).get("alt", 0)
 
-    _loc   = Location(lat=_lat, lon=_lon, alt=_alt)
+    _loc   = (_lat, _lon, _alt)
     _atlas = Atlas(ephe_path=ephe_path, dt=datetime.now(timezone.utc), location=_loc)
     _lock  = threading.Lock()
 
@@ -93,7 +92,7 @@ def create_app() -> "FastAPI":
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-        location = Location(lat=lat, lon=lon, alt=alt)
+        location = (lat, lon, alt)
 
         try:
             with _lock:
@@ -125,7 +124,7 @@ def create_app() -> "FastAPI":
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-        location = Location(lat=lat, lon=lon, alt=alt)
+        location = (lat, lon, alt)
         bodies   = {}
 
         try:

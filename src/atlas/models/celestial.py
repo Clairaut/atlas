@@ -4,11 +4,9 @@
 # Standard libraries
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, Union
+from typing import Optional, Union
 
-# Internal libraries
-if TYPE_CHECKING:
-    from atlas.models.location import Location
+Location = tuple[float, float, float]
 
 
 # Initialize signs
@@ -65,7 +63,7 @@ class Celestial:
 	type: str                  # "inferior" | "superior" | "satellite" | "star"
 
 	dt: datetime
-	location: "Location"
+	location: Location
 
 	color: Optional[str] = field(default=None)  # hex, from [celestials].color config
 

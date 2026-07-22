@@ -2,7 +2,7 @@
 
 # Standard Modules
 from time import perf_counter_ns
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import logging
@@ -12,8 +12,7 @@ import logging
 # External Modules
 import swisseph as swe
 
-if TYPE_CHECKING:
-    from atlas.models.location import Location
+Location = tuple[float, float, float]
 
 
 class Observatory:
@@ -40,7 +39,7 @@ class Observatory:
 		self,
 		ephe_path: str = "",
 		dt: Optional[datetime] = None,
-		location: Optional["Location"] = None,
+		location: Optional[Location] = None,
 		hsys: str = "P",
 		verbose: bool = False
 	):
@@ -121,14 +120,15 @@ class Observatory:
 	 #=========#
 
 	@property
-	def _location(self) -> Optional["Location"]:
+	def _location(self) -> Optional[Location]:
 		return self.__location
 
 	@_location.setter
-	def _location(self, location: "Location") -> None:
+	def _location(self, location: Location) -> None:
 		self.__location = location
 		if location is not None:
-			self._set_ephe_topo(location.lat, location.lon, location.alt)
+			lat, lon, alt = location
+			self._set_ephe_topo(lat, lon, alt)
 
 	@property
 	def _jd(self) -> float:
@@ -150,7 +150,7 @@ class Observatory:
 	 #======#
 
 	# Set observatory datetime/location
-	def set(self, dt: Optional[datetime] = None, location: Optional["Location"] = None):
+	def set(self, dt: Optional[datetime] = None, location: Optional[Location] = None):
 		if dt:
 			self.dt = dt
 		if location:
@@ -171,9 +171,8 @@ class Observatory:
 		if l_delta:
 			if self._location:
 				dlat, dlon, dalt = l_delta
-				old_loc          = self._location
-				new_loc          = type(old_loc)(lat=old_loc.lat + dlat, lon=old_loc.lon + dlon, alt=old_loc.alt + dalt)
-				self._location   = new_loc
+				lat, lon, alt    = self._location
+				self._location   = (lat + dlat, lon + dlon, alt + dalt)
 			else:
 				logging.error("bad observatory location shift: location not set")
 				raise ValueError("Failed to shift observatory location: location is not yet set")
@@ -253,7 +252,8 @@ class Observatory:
 		if not self._location:
 			logging.error("bad observatory cast: location is not yet set")
 			raise ValueError("Failed to cast observatory cusps/ascmc: location is not yet set")
-		cusps, ascmc = swe.houses(self._jd, self._location.lat, self._location.lon, self._hsys.encode()) # type: ignore
+		lat, lon, _  = self._location
+		cusps, ascmc = swe.houses(self._jd, lat, lon, self._hsys.encode()) # type: ignore
 
 		if self._verbose:
 			logging.info("ok observatory cast (dt=%s, location=%s)", self.dt, self._location)

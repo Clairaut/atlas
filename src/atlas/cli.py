@@ -1,5 +1,5 @@
 # Standard Modules
-from typing import TYPE_CHECKING, Optional, List
+from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
@@ -7,15 +7,13 @@ import traceback
 
 # Internal Modules
 from atlas.core.atlas import Atlas
-from atlas.models.location import Location
 from atlas.models.celestial import Celestial
 from atlas.models.aspect import ASPECT_GLYPHS, build_aspects, build_transit_aspects
 from atlas.models.event import Event
 from atlas.utils.config import load_config
 from atlas.utils.chrono import convert_to_utc, utc_to_local
 
-if TYPE_CHECKING:
-    from atlas.models.location import Location
+Location = tuple[float, float, float]
 
 # External Modules
 import typer
@@ -46,7 +44,7 @@ journal_window_hours: int = config.get("journal", {}).get("window_hours", 24)
 
 # Create default location object
 default_location_str: str = f"({lat}, {lon}, {alt})"
-default_location = Location(lat=lat, lon=lon, alt=alt)
+default_location = (lat, lon, alt)
 
 # Default journal targets: every configured celestial that isn't a star
 default_targets: list = [k for k, v in config.get("celestials", {}).items() if v.get("type") != "star"]
@@ -145,12 +143,12 @@ def _parse_step(s: str) -> timedelta:
 
 
 # Parse a 'lat,lon,alt' location string, falling back to the configured default
-def _parse_location(s: str) -> "Location":
+def _parse_location(s: str) -> Location:
     try:
         stripped = s.replace("(", "").replace(")", "")
         parts = [float(x) for x in stripped.split(",")]
         lat, lon, alt = (parts + [0.0])[:3] if len(parts) == 2 else parts[:3]
-        return Location(lat, lon, alt)
+        return (lat, lon, alt)
     except ValueError:
         logging.error("invalid --location argument")
         return default_location
@@ -450,7 +448,7 @@ def _until_str(delta: timedelta) -> str:
 
 
 # Display seek results: {glyph} {body glyphs+names} {detail} {date} {time} {until}
-def _display_seek_results(events: list[Event], location: "Location", concise: bool = False):
+def _display_seek_results(events: list[Event], location: Location, concise: bool = False):
     if not events:
         print("No events found.")
         return

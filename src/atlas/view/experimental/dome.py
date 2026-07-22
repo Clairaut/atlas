@@ -17,7 +17,8 @@ from atlas.view.base import (
 
 if TYPE_CHECKING:
     from atlas.models.celestial import Celestial
-    from atlas.models.location import Location
+
+Location = tuple[float, float, float]
 
 # External Modules
 import moderngl
@@ -310,7 +311,7 @@ class DomeView(BaseGLWindow):
     def configure(
         cls,
         dt:         datetime,
-        location:   "Location",
+        location:   Location,
         planets:    list,
         fetch_fn:   Optional[Callable] = None,
         mag_limit:  float              = 6.5,
@@ -320,8 +321,7 @@ class DomeView(BaseGLWindow):
     ) -> None:
         hour              = dt.hour + dt.minute / 60.0 + dt.second / 3600.0
         cls._cfg_jd        = swe.julday(dt.year, dt.month, dt.day, hour)
-        cls._cfg_lat       = location.lat
-        cls._cfg_lon       = location.lon
+        cls._cfg_lat, cls._cfg_lon, _ = location
         cls._cfg_mag_limit = mag_limit
         cls._cfg_brightness = brightness
         cls._cfg_planets   = planets
