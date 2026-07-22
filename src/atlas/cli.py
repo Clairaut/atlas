@@ -206,7 +206,7 @@ def _display_celestial_states(states: list["Celestial"], concise: bool = False, 
     has_equatorial = any(s.ra  is not None for s in states)
     has_horizontal = any(s.alt is not None for s in states)
     # Mag: always show for stars; show for planets only if -a mag requested
-    has_mag        = any(s.app_mag is not None and (s.type == "star" or "mag" in attrs) for s in states)
+    has_mag        = any(s.app_mag is not None and (s.type == "star" or "magnitude" in attrs) for s in states)
     has_elongation = "elongation" in attrs and any(s.elong is not None for s in states)
     has_phase      = False
 
@@ -492,7 +492,7 @@ def observe(
     step: str = typer.Option("1d", "--step", help="time step for range queries e.g. 1d, 6h, 30m"),
     location: str = typer.Option(default_location_str, "-l", "--location", help="location '(lat,lon,alt)'"),
     zodiac: str = typer.Option("tropical", "-z", "--zodiac", help="zodiac type", case_sensitive=False),
-    attributes: Optional[List[str]] = typer.Option(None, "-a", "--attributes", help="extra attributes: phase, aspects, transits, elongation, mag, zodiac"),
+    attributes: Optional[List[str]] = typer.Option(None, "-a", "--attributes", help="extra attributes: phase, aspects, transits, elongation, magnitude, zodiac"),
     system: List[str] = typer.Option(["ecliptic"], "-s", "--system", help="coordinate systems: ecliptic, equatorial, horizontal"),
     concise: bool = typer.Option(False, "-c", "--concise", help="compact output"),
     pango: bool = typer.Option(False, "-p", "--pango", help="wrap concise output in Pango markup, colored per [celestials].color"),
@@ -536,9 +536,9 @@ def observe(
         else:
             # Single-moment observation
             properties: list[str] = ["position"]
-            if "phase" in attrs or "mag" in attrs or "elongation" in attrs:
+            if "phase" in attrs or "magnitude" in attrs or "elongation" in attrs:
                 properties.append("phenomenon")
-            if "mag" in attrs:
+            if "magnitude" in attrs:
                 properties.append("magnitude")
 
             states: list[Celestial] = []
