@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlas"
-version = "0.5.1"
+version = "0.5.2"
 description = "A SwissEph interface for visualizing astrological/astronomical data."
 authors = [{ name = "clairaut" }]
 requires-python = ">=3.9"
@@ -22,9 +22,6 @@ dependencies = [
     "numpy",
     "glfw",
 ]
-
-[project.optional-dependencies]
-journal = ["journalkit @ file:///home/clairaut/code/personal/journal-kit"]
 
 [project.scripts]
 atlas = "atlas.cli:main"

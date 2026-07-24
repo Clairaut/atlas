@@ -12,6 +12,7 @@ from atlas.models.aspect import ASPECT_GLYPHS, build_aspects, build_transit_aspe
 from atlas.models.event import Event
 from atlas.utils.config import load_config
 from atlas.utils.chrono import convert_to_utc, utc_to_local
+from atlas.utils.journal import JournalEntry, export_section
 
 Location = tuple[float, float, float]
 
@@ -927,12 +928,6 @@ def journal(
         raise typer.Exit(code=1)
     if format not in ("md", "json"):
         print(f"Error: invalid --format '{format}' — choose from md, json")
-        raise typer.Exit(code=1)
-
-    try:
-        from journalkit import JournalEntry, export_section
-    except ImportError:
-        print("Error: journalkit is not installed. Run: pip install atlas[journal]")
         raise typer.Exit(code=1)
 
     global cli_atlas
