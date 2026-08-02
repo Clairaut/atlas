@@ -27,22 +27,25 @@ SIGNS: list[tuple[str, str]] = [
 
 # Phase definitions for inferior planets and the Moon (full phase cycle via phase_cycle)
 # (cycle_angle_deg, name_tpl, glyph) — name_tpl supports {name} substitution
+# Glyphs are geometric fill fractions, not the 🌑 emoji series: view/base.py builds
+# its glyph atlas from text symbols only, so the emoji could never be rendered in a
+# chart, and they force colour-emoji presentation on any client that shows them.
 PHASE_DEFS: list[tuple[float, str, str]] = [
-    (0,   "New {name}",      "🌑"),
-    (45,  "Waxing Crescent", "🌒"),
-    (90,  "First Quarter",   "🌓"),
-    (135, "Waxing Gibbous",  "🌔"),
-    (180, "Full {name}",     "🌕"),
-    (225, "Waning Gibbous",  "🌖"),
-    (270, "Last Quarter",    "🌗"),
-    (315, "Waning Crescent", "🌘"),
+    (0,   "New {name}",      "○"),
+    (45,  "Waxing Crescent", "◔"),
+    (90,  "First Quarter",   "◑"),
+    (135, "Waxing Gibbous",  "◕"),
+    (180, "Full {name}",     "●"),
+    (225, "Waning Gibbous",  "◕"),
+    (270, "Last Quarter",    "◐"),
+    (315, "Waning Crescent", "◔"),
 ]
 
 # Phase display for superior planets — illumination-based, two states only
 # (illum_threshold, name_tpl, glyph) — first entry where phase_illuminated >= threshold wins
 SUPERIOR_PHASE_DEFS: list[tuple[float, str, str]] = [
-    (0.95, "Full {name}",    "🌕"),
-    (0.00, "Gibbous {name}", "🌔"),
+    (0.95, "Full {name}",    "●"),
+    (0.00, "Gibbous {name}", "◕"),
 ]
 
 # Synodic crossing events for superior planets (elongation-based)
