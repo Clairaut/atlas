@@ -17,13 +17,13 @@ src/atlas/data/constellations.dat
 src/atlas/data/stars.npy
 src/atlas/models/__init__.py
 src/atlas/models/aspect.py
-src/atlas/models/celestial_state.py
+src/atlas/models/celestial.py
 src/atlas/models/event.py
-src/atlas/models/location.py
 src/atlas/utils/__init__.py
 src/atlas/utils/chrono.py
 src/atlas/utils/config.py
 src/atlas/utils/constellation.py
+src/atlas/utils/journal.py
 src/atlas/view/__init__.py
 src/atlas/view/base.py
 src/atlas/view/chart.py
@@ -35,4 +35,3 @@ src/atlas/view/shaders/line.frag
 src/atlas/view/shaders/line.vert
 src/atlas/view/shaders/star.frag
 src/atlas/view/shaders/star.vert
-tests/test.py

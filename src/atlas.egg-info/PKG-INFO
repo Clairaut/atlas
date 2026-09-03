@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: atlas
-Version: 0.4.0
+Version: 0.5.2
 Summary: A SwissEph interface for visualizing astrological/astronomical data.
 Author: clairaut
 Requires-Python: >=3.9
@@ -16,4 +16,3 @@ Requires-Dist: moderngl-window
 Requires-Dist: Pillow
 Requires-Dist: numpy
 Requires-Dist: glfw
-Requires-Dist: journalkit @ file:///home/clairaut/code/personal/journal-kit

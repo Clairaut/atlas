@@ -1,42 +1,56 @@
 # src/utils/config.py
 
 # Standard libraries
+import logging
 from pathlib import Path
-
-# Internal libraries
-from atlas.utils.logger import handle_log
 
 # External libraries
 import tomllib
 
-
 DEFAULT_CONFIG = """# Atlas configuration
 [ephemeris]
 path = ""
+
+[output]
+image = ""   # default save path for static charts (.png)
+video = ""   # default save path for playback exports (.mp4)
 
 [location]
 lat = 0.00
 lon = 0.00
 alt = 4.00
 
+# Pango markup sizes used by --pango output (see `atlas observe --pango`)
+[display]
+glyph_size = "16pt"
+detail_size = "11pt"
+
+# Used by `atlas journal`
+[journal]
+dir = "~/documents/journal"
+window_hours = 24
+
 [celestials]
-sun     = { glyph = "☉", name = "Sun",     id = 0,  orbit = "star"      }
-moon    = { glyph = "☽", name = "Moon",    id = 1,  orbit = "satellite" }
-mercury = { glyph = "☿", name = "Mercury", id = 2,  orbit = "inferior"  }
-venus   = { glyph = "♀", name = "Venus",   id = 3,  orbit = "inferior"  }
-mars    = { glyph = "♂", name = "Mars",    id = 4,  orbit = "superior"  }
-jupiter = { glyph = "♃", name = "Jupiter", id = 5,  orbit = "superior"  }
-saturn  = { glyph = "♄", name = "Saturn",  id = 6,  orbit = "superior"  }
-uranus  = { glyph = "♅", name = "Uranus",  id = 7,  orbit = "superior"  }
-neptune = { glyph = "♆", name = "Neptune", id = 8,  orbit = "superior"  }
-pluto   = { glyph = "⯓", name = "Pluto",   id = 9,  orbit = "superior"  }
-lilith  = { glyph = "⚸", name = "Lilith",  id = 12, orbit = "superior"  }
-chiron  = { glyph = "⚷", name = "Chiron",  id = 15, orbit = "superior"  }
-pholus  = { glyph = "⯛", name = "Pholus",  id = 16, orbit = "superior"  }
-ceres   = { glyph = "⚳", name = "Ceres",   id = 17, orbit = "superior"  }
-pallas  = { glyph = "⚴", name = "Pallas",  id = 18, orbit = "superior"  }
-juno    = { glyph = "⚵", name = "Juno",    id = 19, orbit = "superior"  }
-vesta   = { glyph = "⚶", name = "Vesta",   id = 20, orbit = "superior"  }
+sun     = { glyph = "☉", name = "Sun",     id = 0,  type = "star",      color = "#f6ffc1" }
+moon    = { glyph = "☽", name = "Moon",    id = 1,  type = "satellite", color = "#cccccc" }
+mercury = { glyph = "☿", name = "Mercury", id = 2,  type = "inferior",  color = "#b4cdf3" }
+venus   = { glyph = "♀", name = "Venus",   id = 3,  type = "inferior",  color = "#ffc9e9" }
+mars    = { glyph = "♂", name = "Mars",    id = 4,  type = "superior",  color = "#ff5555" }
+jupiter = { glyph = "♃", name = "Jupiter", id = 5,  type = "superior"  }
+saturn  = { glyph = "♄", name = "Saturn",  id = 6,  type = "superior"  }
+uranus  = { glyph = "♅", name = "Uranus",  id = 7,  type = "superior"  }
+neptune = { glyph = "♆", name = "Neptune", id = 8,  type = "superior"  }
+pluto   = { glyph = "⯓", name = "Pluto",   id = 9,  type = "superior"  }
+lilith  = { glyph = "⚸", name = "Lilith",  id = 12, type = "superior"  }
+chiron  = { glyph = "⚷", name = "Chiron",  id = 15, type = "superior"  }
+pholus  = { glyph = "⯛", name = "Pholus",  id = 16, type = "superior"  }
+ceres   = { glyph = "⚳", name = "Ceres",   id = 17, type = "superior"  }
+pallas  = { glyph = "⚴", name = "Pallas",  id = 18, type = "superior"  }
+juno    = { glyph = "⚵", name = "Juno",    id = 19, type = "superior"  }
+vesta      = { glyph = "⚶", name = "Vesta",      id = 20,           type = "superior" }
+true_node  = { glyph = "☊", name = "True Node",  id = 11,           type = "node"     }
+south_node = { glyph = "☋", name = "South Node", id = "south_node", type = "derived",  source = "true_node", lon_offset = 180 }
+sirius     = { glyph = "✦", name = "Sirius",      id = "Sirius",     type = "star"     }
 """
 
 # Load Atlas config, create defaults if missing
@@ -48,11 +62,11 @@ def load_config() -> dict:
 	if not config_file.exists():
 		config_dir.mkdir(parents=True, exist_ok=True)
 		config_file.write_text(DEFAULT_CONFIG)
-		handle_log("warning", "config missing - created default at %s", config_file)
+		logging.warning("config missing - created default at %s", config_file)
 
 	# Open config file with read binary
 	with config_file.open("rb") as f:
 		config = tomllib.load(f)
 
-	handle_log("info", "config loaded from %s", config_file)
+	logging.info("config loaded from %s", config_file)
 	return config

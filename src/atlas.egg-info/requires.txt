@@ -10,4 +10,3 @@ moderngl-window
 Pillow
 numpy
 glfw
-journalkit @ file:///home/clairaut/code/personal/journal-kit
