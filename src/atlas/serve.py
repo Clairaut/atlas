@@ -7,39 +7,10 @@ from typing import TYPE_CHECKING
 
 # Internal Modules
 from atlas.core.atlas import Atlas
-from atlas.models.celestial import Celestial
 from atlas.utils.config import load_config
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-
-
-# Serialize a Celestial to a JSON-safe dict
-def _serialize(state: Celestial) -> dict:
-    sign_glyph, sign_name = state.sign
-    phase = state.phase
-    return {
-        "glyph":           state.glyph,
-        "name":            state.name,
-        "type":            state.type,
-        "lon":             state.lon,
-        "lat":             state.lat,
-        "dist":            state.dist,
-        "dlon":            state.dlon,
-        "elong":           state.elong,
-        "elong_waxing":    state.elong_waxing,
-        "app_mag":         state.app_mag,
-        "app_diam":        state.app_diam,
-        "retrograde":      state.retrograde,
-        "sign":            sign_name,
-        "sign_glyph":      sign_glyph,
-        "orb":             round(state.orb, 4),
-        "phase":             phase[0] if phase else None,
-        "phase_glyph":       phase[1] if phase else None,
-        "phase_illuminated": round((state.phase_illuminated or 0), 1),
-        "phase_angle":       round(state.phase_angle, 2) if state.phase_angle is not None else None,
-        "phase_waxing":            state.phase_waxing
-    }
 
 
 # Build and return a configured FastAPI app
@@ -143,7 +114,7 @@ def create_app() -> "FastAPI":
                         systems    = ["ecliptic"],
                     )
 
-                    bodies[target] = _serialize(state)
+                    bodies[target] = state.dict()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 

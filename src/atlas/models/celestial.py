@@ -194,3 +194,30 @@ class Celestial:
 			raise ValueError(f"Expected 7 values for phenomenon, got {len(pheno)}: {pheno}")
 		self.phase_angle, self.phase_illuminated, self.elong, self.app_diam, self.app_mag, self.phase_waxing, self.elong_waxing = pheno
 
+	# JSON-safe dict of the celestial's public state
+	def dict(self) -> dict:
+		sign_glyph, sign_name = self.sign
+		phase = self.phase
+		return {
+			"glyph":             self.glyph,
+			"name":              self.name,
+			"type":              self.type,
+			"lon":               self.lon,
+			"lat":               self.lat,
+			"dist":              self.dist,
+			"dlon":              self.dlon,
+			"elong":             self.elong,
+			"elong_waxing":      self.elong_waxing,
+			"app_mag":           self.app_mag,
+			"app_diam":          self.app_diam,
+			"retrograde":        self.retrograde,
+			"sign":              sign_name,
+			"sign_glyph":        sign_glyph,
+			"orb":               round(self.orb, 4),
+			"phase":             phase[0] if phase else None,
+			"phase_glyph":       phase[1] if phase else None,
+			"phase_illuminated": round((self.phase_illuminated or 0), 1),
+			"phase_angle":       round(self.phase_angle, 2) if self.phase_angle is not None else None,
+			"phase_waxing":      self.phase_waxing,
+		}
+
