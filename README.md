@@ -233,9 +233,16 @@ Request params naming datetimes end in `_at`; the matching response fields end
 in `_dt`. Every endpoint shares `zodiac` and `lat` / `lon` / `alt`, which fall
 back to the config values.
 
+A bare datetime is read as **local time where the observer is**, with the zone
+derived from the coordinates, because that is how people write down the moment
+they mean. Reading it as UTC instead moves a chart by the whole offset and
+changes the ascendant without saying so. Give a time explicitly with an offset
+or a trailing `Z`. A local time that never happened, or happened twice, at a
+daylight saving boundary is refused rather than guessed at.
+
 | Shared param | Description |
 |-------|-------------|
-| `at` | Datetime `YYYY-MM-DD[THH:MM:SS]` (default: now) |
+| `at` | Datetime `YYYY-MM-DD[THH:MM[:SS]]` (default: now). Read as **local time at `lat`/`lon`**; add an offset or a trailing `Z` to give it explicitly |
 | `targets` | Comma-separated body names (default: all configured) |
 | `zodiac` | `tropical` (default) or `sidereal` |
 | `lat` / `lon` / `alt` | Observer location (default: config values) |
@@ -249,9 +256,9 @@ back to the config values.
 | `hsys` | `placidus` (default), `koch`, `porphyry`, `regiomontanus`, `campanus`, `equal`, `whole` / `wholesign` / `ws` |
 
 **`GET /compare`** — aspects within one chart, or those a second moment makes
-to it. Natal-and-now is only the common pair: both dates are arbitrary, so the
-same endpoint answers "what did these two dates have in common" and "what is
-happening to my chart today".
+to it. Both dates are arbitrary and neither moment is privileged, so the same
+endpoint answers "what did these two dates have in common" and "what is
+transiting this chart today".
 
 | Param | Description |
 |-------|-------------|
@@ -268,7 +275,8 @@ atlas serve --port 8080              # custom port
 uvicorn atlas.serve:create_app --factory --host 127.0.0.1 --port 5001
 
 curl "http://127.0.0.1:5001/observe"
-curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T12:00:00"
+curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T09:23:00"  # local
+curl "http://127.0.0.1:5001/observe?targets=sun,moon&at=1999-09-29T14:23:00Z" # explicit UTC
 curl "http://127.0.0.1:5001/observe?zodiac=sidereal&lat=48.85&lon=2.35"
 
 curl "http://127.0.0.1:5001/cast?hsys=wholesign"

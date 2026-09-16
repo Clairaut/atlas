@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 # Internal Modules
 from atlas.core.atlas import Atlas
 from atlas.models.aspect import build_aspects, build_transit_aspects
+from atlas.utils.chrono import convert_to_utc
 from atlas.utils.config import load_config
 
 if TYPE_CHECKING:
@@ -39,13 +40,30 @@ def create_app() -> "FastAPI":
 
     _available_celestials = list(cfg.get("celestials", {}).keys())
 
-    # Parse a datetime string — ISO format with optional time component
-    def _parse_dt(s: str) -> datetime:
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    # Parse a datetime string. A value carrying an offset, or a trailing Z, is
+    # taken at its word. A bare one is read as local time where the observer is,
+    # because that is how people write down the moment they mean: reading it as
+    # UTC silently moves a chart by the whole offset and changes the ascendant.
+    def _parse_dt(s: str, location: tuple) -> datetime:
+        try:
+            aware = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
+            if aware.tzinfo is not None:
+                return aware.astimezone(timezone.utc)
+        except ValueError:
+            pass
+
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
             try:
-                return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+                naive = datetime.strptime(s.strip(), fmt)
             except ValueError:
                 continue
+            try:
+                return convert_to_utc(naive, location).replace(tzinfo=timezone.utc)
+            except Exception as exc:
+                # A time that never happened, or happened twice, at a daylight
+                # saving boundary. Say which rather than silently picking one.
+                raise ValueError(f"'{s}' is ambiguous or does not exist in the timezone at that location") from exc
+
         raise ValueError(f"unrecognized datetime format: '{s}'")
 
     # Locate the requested bodies at one moment, keyed by target name
@@ -82,7 +100,7 @@ def create_app() -> "FastAPI":
         alt: float = _alt,
     ):
         try:
-            now = _parse_dt(at) if at else datetime.now(timezone.utc)
+            now = _parse_dt(at, (lat, lon, alt)) if at else datetime.now(timezone.utc)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -114,7 +132,7 @@ def create_app() -> "FastAPI":
     ):
         targets = _resolve_targets(targets)
         try:
-            now = _parse_dt(at) if at else datetime.now(timezone.utc)
+            now = _parse_dt(at, (lat, lon, alt)) if at else datetime.now(timezone.utc)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -134,7 +152,7 @@ def create_app() -> "FastAPI":
         }
 
     # Return aspects within one chart, or — given transit_at — the aspects a second
-    # moment makes to it. Either date is arbitrary: natal and now are just the common pair.
+    # moment makes to it. Both dates are arbitrary; neither moment is privileged.
     @app.get("/compare")
     def compare(
         targets:     str   = "",
@@ -151,8 +169,8 @@ def create_app() -> "FastAPI":
         targets = _resolve_targets(targets)
 
         try:
-            chart_dt   = _parse_dt(at) if at else datetime.now(timezone.utc)
-            transit_dt = _parse_dt(transit_at) if transit_at else None
+            chart_dt   = _parse_dt(at, (lat, lon, alt)) if at else datetime.now(timezone.utc)
+            transit_dt = _parse_dt(transit_at, (transit_lat, transit_lon, transit_alt)) if transit_at else None
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 

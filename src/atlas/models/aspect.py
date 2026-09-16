@@ -59,7 +59,7 @@ def build_aspects(celestials: "list[Celestial]") -> list[Aspect]:
 
 
 # Compute transiting aspects made to a chart by the bodies of a second moment.
-# The chart is often natal and the transit often now, but neither is required.
+# Both charts are arbitrary moments; neither is privileged.
 def build_transit_aspects(chart: "list[Celestial]", transit: "list[Celestial]") -> list[Aspect]:
     aspects: list[Aspect] = []
     for a in chart:

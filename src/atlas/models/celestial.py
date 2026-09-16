@@ -1,4 +1,4 @@
-# atlas/src/models/cosmo.py
+# atlas/src/models/celestial.py
 
 
 # Standard libraries
